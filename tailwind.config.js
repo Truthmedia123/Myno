@@ -3,7 +3,7 @@ module.exports = {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   safelist: [
-    "text-orange-500","bg-orange-100","border-orange-200",
+    "text-orange-500", "bg-orange-100", "border-orange-200",
   ],
   theme: {
     extend: {
@@ -49,6 +49,23 @@ module.exports = {
         'float': { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-12px)' } },
         'pulse-ring': { '0%': { transform: 'scale(1)', opacity: '1' }, '100%': { transform: 'scale(1.6)', opacity: '0' } },
         'shimmer': { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        'slide-up-bounce': {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '70%': { transform: 'translateY(-5px)', opacity: '1' },
+          '100%': { transform: 'translateY(0)', opacity: '1' }
+        },
+        'scale-on-press': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(0.95)' }
+        },
+        'bounce-dot': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' }
+        },
+        'green-flash': {
+          '0%, 100%': { backgroundColor: 'transparent' },
+          '50%': { backgroundColor: 'rgba(152, 255, 216, 0.3)' }
+        }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -56,6 +73,10 @@ module.exports = {
         'float': 'float 3.5s ease-in-out infinite',
         'pulse-ring': 'pulse-ring 1.4s ease-out infinite',
         'shimmer': 'shimmer 2s linear infinite',
+        'slide-up-bounce': 'slide-up-bounce 0.5s ease-out',
+        'scale-on-press': 'scale-on-press 0.2s ease-in-out',
+        'bounce-dot': 'bounce-dot 0.6s ease-in-out infinite',
+        'green-flash': 'green-flash 0.5s ease-out'
       },
     },
   },

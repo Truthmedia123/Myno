@@ -1,5 +1,5 @@
 import React from "react";
-import { Volume2 } from "lucide-react";
+import { SpeakerWaveIcon } from "@heroicons/react/24/outline";
 import { cn } from "@/lib/utils";
 
 export default function ChatBubble({ message, onPlayAudio }) {
@@ -21,7 +21,7 @@ export default function ChatBubble({ message, onPlayAudio }) {
             onClick={() => onPlayAudio(message.content)}
             className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-secondary transition-colors"
           >
-            <Volume2 className="w-3.5 h-3.5" />
+            <SpeakerWaveIcon className="w-3.5 h-3.5" />
             <span>Play audio</span>
           </button>
         )}

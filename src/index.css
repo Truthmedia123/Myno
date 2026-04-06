@@ -125,4 +125,80 @@
       opacity: 0;
     }
   }
+
+  /* Slide-up with bounce animation for word cards */
+  @keyframes slideUpBounce {
+    0% {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+
+    60% {
+      transform: translateY(-8px);
+      opacity: 1;
+    }
+
+    80% {
+      transform: translateY(4px);
+    }
+
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  /* Bouncing dots animation for AI thinking */
+  @keyframes bounceDot {
+
+    0%,
+    80%,
+    100% {
+      transform: translateY(0);
+    }
+
+    40% {
+      transform: translateY(-8px);
+    }
+  }
+
+  /* Green border flash animation */
+  @keyframes greenFlash {
+    0% {
+      border-color: hsl(157 100% 80% / 0);
+    }
+
+    50% {
+      border-color: hsl(157 100% 80%);
+    }
+
+    100% {
+      border-color: hsl(157 100% 80% / 0);
+    }
+  }
+
+  /* Spring easing transition */
+  .spring-easing {
+    animation-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  /* Utility classes */
+  .animate-slide-up-bounce {
+    animation: slideUpBounce 0.6s ease-out;
+  }
+
+  .animate-bounce-dot {
+    animation: bounceDot 1.4s infinite ease-in-out;
+  }
+
+  .animate-green-flash {
+    border: 2px solid transparent;
+    animation: greenFlash 0.4s ease-in-out;
+  }
+
+  /* Scale on press (for speak button) */
+  .scale-on-press:active {
+    transform: scale(0.92);
+    transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }

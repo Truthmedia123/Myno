@@ -1,14 +1,45 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, MessageCircle, BookOpen, Crown } from "lucide-react";
+import {
+  HomeIcon as HomeOutline,
+  ChatBubbleLeftRightIcon as MessageCircleOutline,
+  BookOpenIcon as BookOpenOutline,
+  TrophyIcon as CrownOutline
+} from "@heroicons/react/24/outline";
+import {
+  HomeIcon as HomeSolid,
+  ChatBubbleLeftRightIcon as MessageCircleSolid,
+  BookOpenIcon as BookOpenSolid,
+  TrophyIcon as CrownSolid
+} from "@heroicons/react/24/solid";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/", icon: Home, label: "Home" },
-  { path: "/chat", icon: MessageCircle, label: "Coach" },
-  { path: "/vault", icon: BookOpen, label: "Vault" },
-  { path: "/pro", icon: Crown, label: "Pro" },
+  {
+    path: "/",
+    iconOutline: HomeOutline,
+    iconSolid: HomeSolid,
+    label: "Home"
+  },
+  {
+    path: "/chat",
+    iconOutline: MessageCircleOutline,
+    iconSolid: MessageCircleSolid,
+    label: "Coach"
+  },
+  {
+    path: "/vault",
+    iconOutline: BookOpenOutline,
+    iconSolid: BookOpenSolid,
+    label: "Vault"
+  },
+  {
+    path: "/pro",
+    iconOutline: CrownOutline,
+    iconSolid: CrownSolid,
+    label: "Pro"
+  },
 ];
 
 export default function BottomNav() {
@@ -17,8 +48,9 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t">
       <div className="max-w-md mx-auto flex items-center justify-around px-2 py-2 pb-safe">
-        {navItems.map(({ path, icon: Icon, label }) => {
+        {navItems.map(({ path, iconOutline: IconOutline, iconSolid: IconSolid, label }) => {
           const active = pathname === path;
+          const Icon = active ? IconSolid : IconOutline;
           return (
             <Link key={path} to={path} className="relative flex flex-col items-center gap-0.5 px-5 py-2">
               {active && (
@@ -33,7 +65,6 @@ export default function BottomNav() {
                   "w-5 h-5 relative z-10 transition-colors",
                   active ? "text-secondary" : "text-muted-foreground"
                 )}
-                strokeWidth={active ? 2.5 : 1.8}
               />
               <span className={cn(
                 "text-[10px] font-semibold relative z-10 transition-colors",

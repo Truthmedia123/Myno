@@ -1,15 +1,15 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Crown, MessageCircle, Mic, WifiOff, Zap, Check } from "lucide-react";
+import { TrophyIcon, ChatBubbleLeftRightIcon, MicrophoneIcon, WifiIcon, BoltIcon, CheckIcon } from "@heroicons/react/24/outline";
 import MynoBird from "@/components/myno/MynoBird";
 import { schedulePaywallDrip, requestNotificationPermission, scheduleStreakReminder } from "@/lib/notifications";
 
 const BENEFITS = [
-  { icon: MessageCircle, text: "Unlimited AI conversations daily" },
-  { icon: Mic, text: "Advanced pronunciation scoring" },
-  { icon: WifiOff, text: "Offline lesson packs" },
-  { icon: Zap, text: "Priority AI with faster responses" },
+  { icon: ChatBubbleLeftRightIcon, text: "Unlimited AI conversations daily" },
+  { icon: MicrophoneIcon, text: "Advanced pronunciation scoring" },
+  { icon: WifiIcon, text: "Offline lesson packs" },
+  { icon: BoltIcon, text: "Priority AI with faster responses" },
 ];
 
 export default function Paywall() {
@@ -41,7 +41,7 @@ export default function Paywall() {
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/15 border border-secondary/20 mb-3">
-              <Crown className="w-3.5 h-3.5 text-secondary" />
+              <TrophyIcon className="w-3.5 h-3.5 text-secondary" />
               <span className="text-[11px] font-extrabold text-secondary uppercase tracking-wider">MYNO Pro</span>
             </div>
             <h1 className="text-3xl font-extrabold text-foreground leading-tight">
@@ -75,7 +75,7 @@ export default function Paywall() {
                 <Icon className="w-5 h-5 text-secondary" />
               </div>
               <p className="text-sm font-semibold text-foreground flex-1">{text}</p>
-              <Check className="w-4 h-4 text-primary flex-shrink-0" strokeWidth={3} />
+              <CheckIcon className="w-4 h-4 text-primary flex-shrink-0" strokeWidth={3} />
             </motion.div>
           ))}
         </motion.div>
@@ -103,7 +103,7 @@ export default function Paywall() {
           onClick={handleSubscribe}
           className="thumb-cta w-full bg-secondary text-secondary-foreground shadow-sea flex items-center justify-center gap-2"
         >
-          <Crown className="w-5 h-5" />
+          <TrophyIcon className="w-5 h-5" />
           Start 7-Day Free Trial
         </motion.button>
 

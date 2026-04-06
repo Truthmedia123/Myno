@@ -1,5 +1,5 @@
 import React from "react";
-import { Volume2, Trash2 } from "lucide-react";
+import { SpeakerWaveIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { motion } from "framer-motion";
 
 export default function WordCard({ word, onDelete, onPlayAudio }) {
@@ -22,7 +22,7 @@ export default function WordCard({ word, onDelete, onPlayAudio }) {
               onClick={() => onPlayAudio(word.word)}
               className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center hover:bg-primary/25 transition-colors"
             >
-              <Volume2 className="w-4 h-4 text-secondary" />
+              <SpeakerWaveIcon className="w-4 h-4 text-secondary" />
             </button>
           )}
           {onDelete && (
@@ -30,7 +30,7 @@ export default function WordCard({ word, onDelete, onPlayAudio }) {
               onClick={() => onDelete(word.id)}
               className="w-8 h-8 rounded-xl bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
             >
-              <Trash2 className="w-4 h-4 text-destructive" />
+              <TrashIcon className="w-4 h-4 text-destructive" />
             </button>
           )}
         </div>

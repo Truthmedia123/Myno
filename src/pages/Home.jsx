@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Flame, BookOpen, Sparkles, Crown, BarChart3, Trophy, Target } from "lucide-react";
+import { FireIcon, BookOpenIcon, SparklesIcon, TrophyIcon as CrownIcon, ChartBarIcon, FlagIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
@@ -365,7 +365,7 @@ export default function Home() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-10 pb-2">
         <div className="flex items-center gap-2 streak-bg streak-border border rounded-2xl px-3 py-1.5">
-          <Flame className="w-4 h-4 text-orange-500" />
+          <FireIcon className="w-4 h-4 text-orange-500" />
           <span className="text-sm font-extrabold text-orange-500">{streak}</span>
           <button
             onClick={() => shareContent(getShareText("streak", { language: profile?.target_language, days: streak }))}
@@ -377,12 +377,12 @@ export default function Home() {
         </div>
 
         <Link to="/pro" className="flex items-center gap-2 bg-secondary/10 border border-secondary/20 rounded-2xl px-3 py-1.5">
-          <Crown className="w-4 h-4 text-secondary" />
+          <CrownIcon className="w-4 h-4 text-secondary" />
           <span className="text-xs font-bold text-secondary">Pro</span>
         </Link>
 
         <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-2xl px-3 py-1.5">
-          <BookOpen className="w-4 h-4 text-secondary" />
+          <BookOpenIcon className="w-4 h-4 text-secondary" />
           <span className="text-sm font-extrabold text-secondary">{wordsMastered}</span>
         </div>
       </div>
@@ -423,7 +423,7 @@ export default function Home() {
         >
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
-              <Target className="w-4 h-4 text-purple-600" />
+              <FlagIcon className="w-4 h-4 text-purple-600" />
               <p className="text-sm font-bold text-purple-700">Focus Area</p>
             </div>
             <button
@@ -462,7 +462,7 @@ export default function Home() {
         >
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-primary" />
+              <ChartBarIcon className="w-4 h-4 text-primary" />
               <p className="text-sm font-bold text-foreground">Weekly Progress</p>
             </div>
             <button
@@ -525,7 +525,7 @@ export default function Home() {
         >
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-green-600" />
+              <TrophyIcon className="w-4 h-4 text-green-600" />
               <p className="text-sm font-bold text-green-700">My Progress This Week</p>
             </div>
             <button
@@ -644,7 +644,6 @@ export default function Home() {
           </button>
         </motion.div>
       )}
-      )}
 
       {/* 7-Day Learning Path Roadmap */}
       <motion.div
@@ -707,7 +706,7 @@ export default function Home() {
           onClick={() => navigate("/chat")}
           className="thumb-cta w-full bg-secondary text-secondary-foreground shadow-sea flex items-center justify-center gap-3"
         >
-          <Sparkles className="w-5 h-5" />
+          <SparklesIcon className="w-5 h-5" />
           Speak with Myno
         </motion.button>
         <motion.button
@@ -718,7 +717,7 @@ export default function Home() {
           onClick={() => navigate("/vault")}
           className="w-full h-12 rounded-2xl border-2 border-border bg-card text-foreground font-bold text-sm flex items-center justify-center gap-2 hover:border-primary transition-colors"
         >
-          <BookOpen className="w-4 h-4" />
+          <BookOpenIcon className="w-4 h-4" />
           Review Word Vault ({wordsMastered} words)
         </motion.button>
       </div>
@@ -749,7 +748,7 @@ export default function Home() {
 
             <div className="relative z-10 text-center">
               <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                <Trophy className="w-10 h-10 text-white" />
+                <TrophyIcon className="w-10 h-10 text-white" />
               </div>
 
               <h3 className="text-2xl font-extrabold text-foreground mb-2">You Leveled Up! 🎉</h3>

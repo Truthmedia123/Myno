@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Square, ChevronRight, Briefcase, Plane, MessageCircle, Smile, Sparkles, Star, Target } from "lucide-react";
+import { MicrophoneIcon, StopIcon, ChevronRightIcon, BriefcaseIcon, PaperAirplaneIcon, ChatBubbleLeftRightIcon, FaceSmileIcon, SparklesIcon, StarIcon, FlagIcon } from "@heroicons/react/24/outline";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import LanguageGrid from "@/components/myno/LanguageGrid";
 import FluencyAnalyzer from "@/components/myno/FluencyAnalyzer";
@@ -9,10 +9,10 @@ import MynoBird from "@/components/myno/MynoBird";
 import { getBcp47Tag } from "@/lib/voiceEngine";
 
 const GOALS = [
-  { id: "travel", icon: Plane, label: "Travel", desc: "Navigate trips confidently" },
-  { id: "career", icon: Briefcase, label: "Career", desc: "Ace interviews & meetings" },
-  { id: "everyday", icon: MessageCircle, label: "Everyday", desc: "Connect with people" },
-  { id: "fun", icon: Smile, label: "Just for Fun", desc: "Explore a new culture" },
+  { id: "travel", icon: PaperAirplaneIcon, label: "Travel", desc: "Navigate trips confidently" },
+  { id: "career", icon: BriefcaseIcon, label: "Career", desc: "Ace interviews & meetings" },
+  { id: "everyday", icon: ChatBubbleLeftRightIcon, label: "Everyday", desc: "Connect with people" },
+  { id: "fun", icon: FaceSmileIcon, label: "Just for Fun", desc: "Explore a new culture" },
 ];
 
 const SAMPLE_PHRASE = "The quick brown fox jumps over the lazy dog near the riverbank at sunset.";
@@ -457,9 +457,9 @@ export default function Onboarding() {
 
               <div className="space-y-3">
                 {[
-                  { level: "beginner", label: "Complete Beginner", desc: "I'm just starting out", icon: Sparkles },
-                  { level: "some", label: "Know a little", desc: "I know basic words/phrases", icon: Star },
-                  { level: "intermediate", label: "Intermediate+", desc: "I can hold simple conversations", icon: Target }
+                  { level: "beginner", label: "Complete Beginner", desc: "I'm just starting out", icon: SparklesIcon },
+                  { level: "some", label: "Know a little", desc: "I know basic words/phrases", icon: StarIcon },
+                  { level: "intermediate", label: "Intermediate+", desc: "I can hold simple conversations", icon: FlagIcon }
                 ].map(({ level, label, desc, icon: Icon }) => (
                   <motion.button
                     key={level}
@@ -544,7 +544,7 @@ export default function Onboarding() {
                         {recording && (
                           <div className="absolute inset-0 rounded-full bg-destructive/30 animate-pulse-ring" />
                         )}
-                        {recording ? <Square className="w-7 h-7 text-white" /> : <Mic className="w-7 h-7 text-white" />}
+                        {recording ? <StopIcon className="w-7 h-7 text-white" /> : <MicrophoneIcon className="w-7 h-7 text-white" />}
                       </motion.button>
                       <p className="text-xs text-muted-foreground font-medium">
                         {recording ? "Listening… Tap to stop" : recordingDone ? "✓ Recorded!" : "Tap the mic to start"}
@@ -624,7 +624,7 @@ export default function Onboarding() {
           className="thumb-cta w-full bg-secondary text-secondary-foreground shadow-sea disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {step === 4 ? "Analyze My Voice" : "Continue"}
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRightIcon className="w-5 h-5" />
         </motion.button>
       </div>
     </div>

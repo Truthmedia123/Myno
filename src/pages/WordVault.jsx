@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Search, BookOpen, Volume2, Plus, Loader2, X, Trash2 } from "lucide-react";
+import { ArrowLeftIcon, MagnifyingGlassIcon, BookOpenIcon, SpeakerWaveIcon, PlusIcon, ArrowPathIcon, XMarkIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -204,7 +204,7 @@ export default function WordVault() {
       <div className="sticky top-0 z-10 glass border-b px-4 py-4">
         <div className="flex items-center gap-3 mb-4">
           <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeftIcon className="w-4 h-4" />
           </Link>
           <div className="flex-1">
             <h1 className="text-base font-extrabold text-foreground">Word Vault</h1>
@@ -240,7 +240,7 @@ export default function WordVault() {
 
         {/* Search */}
         <div className="relative mb-2">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -263,7 +263,7 @@ export default function WordVault() {
             disabled={!addInput.trim() || isAdding}
             className="w-10 h-10 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center disabled:opacity-40"
           >
-            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {isAdding ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -291,11 +291,11 @@ export default function WordVault() {
       {/* Word list */}
       <div className="px-4 pt-4 space-y-3">
         {isLoading ? (
-          <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          <div className="flex justify-center py-16"><ArrowPathIcon className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         ) : filteredWords.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-3 text-center">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <BookOpen className="w-7 h-7 text-muted-foreground" />
+              <BookOpenIcon className="w-7 h-7 text-muted-foreground" />
             </div>
             <p className="font-bold text-foreground">No words yet</p>
             <p className="text-sm text-muted-foreground px-8">

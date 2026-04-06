@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, Mic, Square, Volume2, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeftIcon, PaperAirplaneIcon, MicrophoneIcon, StopIcon, SpeakerWaveIcon, ArrowPathIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import { invokeGeminiChat } from "@/lib/gemini";
@@ -889,7 +889,7 @@ Reply with only valid JSON, no extra text.`
       {/* Header */}
       <div className="glass flex items-center gap-3 px-4 py-3 border-b">
         <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeftIcon className="w-4 h-4" />
         </Link>
         <div className="flex items-center gap-2.5 flex-1">
           <MynoBird size="sm" speaking={isSpeaking} />
@@ -1385,16 +1385,16 @@ Reply with only valid JSON, no extra text.`
                       <p className="text-sm leading-relaxed whitespace-pre-wrap mb-3">{msg.parsed.reaction}</p>
                     )}
                     {/* Word card */}
-                    <div className="bg-primary/10 rounded-2xl p-4 mb-3 text-center">
+                    <div className="bg-primary/10 rounded-2xl p-4 mb-3 text-center animate-slide-up-bounce">
                       <p className="text-3xl font-bold text-foreground mb-1">{msg.parsed.word}</p>
                       {msg.parsed.meaning && (
                         <p className="text-sm text-muted-foreground">{msg.parsed.meaning}</p>
                       )}
                       <button
                         onClick={() => speak(msg.parsed.word, true)}
-                        className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors mx-auto"
+                        className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors mx-auto scale-on-press"
                       >
-                        <Volume2 className="w-3 h-3" />
+                        <SpeakerWaveIcon className="w-3 h-3" />
                         Speak word
                       </button>
                     </div>
@@ -1411,7 +1411,7 @@ Reply with only valid JSON, no extra text.`
                         onClick={() => speak(msg.content)}
                         className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors"
                       >
-                        <Volume2 className="w-3 h-3" />
+                        <SpeakerWaveIcon className="w-3 h-3" />
                         Play
                       </button>
                     )}
@@ -1438,9 +1438,9 @@ Reply with only valid JSON, no extra text.`
           <div className="flex justify-start">
             <div className="bg-card border border-border rounded-3xl rounded-bl-sm px-4 py-3">
               <div className="flex gap-1.5 items-center">
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "160ms" }} />
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "320ms" }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "0ms" }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "160ms" }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "320ms" }} />
               </div>
             </div>
           </div>
@@ -1451,20 +1451,19 @@ Reply with only valid JSON, no extra text.`
       <div className="glass border-t px-4 py-3">
         {/* Big mic button */}
         <div className="flex justify-center mb-3">
-          <motion.button
-            whileTap={{ scale: 0.92 }}
+          <button
             onClick={isListening ? stopVoice : startVoiceInput}
             className={cn(
-              "relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all",
+              "relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all scale-on-press",
               isListening ? "bg-destructive shadow-red-300" : "bg-secondary shadow-sea"
             )}
           >
             {isListening && <div className="absolute inset-0 rounded-full border-4 border-primary/60 animate-pulse-ring" style={{ borderColor: "#98FFD8" }} />}
             {isListening
-              ? <Square className="w-6 h-6 text-white" />
-              : <Mic className="w-6 h-6 text-white" />
+              ? <StopIcon className="w-6 h-6 text-white" />
+              : <MicrophoneIcon className="w-6 h-6 text-white" />
             }
-          </motion.button>
+          </button>
         </div>
         {/* Pronunciation quality label */}
         {pronunciationResult && (
@@ -1534,7 +1533,7 @@ Reply with only valid JSON, no extra text.`
             disabled={!input.trim() || isLoading}
             className="w-11 h-11 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-secondary/90"
           >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <PaperAirplaneIcon className="w-4 h-4" />}
           </button>
         </div>
       </div>
