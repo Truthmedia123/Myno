@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-jakarta: 'Plus Jakarta Sans', sans-serif;
+
+    --background: 160 30% 97%;
+    --foreground: 195 100% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 195 100% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 195 100% 12%;
+
+    --primary: 157 100% 80%;
+    --primary-foreground: 195 100% 12%;
+
+    --secondary: 195 100% 20%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 160 20% 93%;
+    --muted-foreground: 195 20% 45%;
+
+    --accent: 157 100% 88%;
+    --accent-foreground: 195 100% 12%;
+
+    --destructive: 8 90% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 160 15% 88%;
+    --input: 160 15% 88%;
+    --ring: 157 100% 80%;
+
+    --radius: 1.5rem;
+
+    /* Streak orange */
+    --streak: 28 100% 60%;
+    --streak-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 195 60% 6%;
+    --foreground: 157 40% 95%;
+    --card: 195 60% 10%;
+    --card-foreground: 157 40% 95%;
+    --popover: 195 60% 10%;
+    --popover-foreground: 157 40% 95%;
+    --primary: 157 100% 80%;
+    --primary-foreground: 195 100% 12%;
+    --secondary: 195 60% 28%;
+    --secondary-foreground: 157 40% 95%;
+    --muted: 195 40% 14%;
+    --muted-foreground: 157 20% 55%;
+    --accent: 195 50% 16%;
+    --accent-foreground: 157 40% 95%;
+    --destructive: 8 90% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 195 40% 16%;
+    --input: 195 40% 16%;
+    --ring: 157 100% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-jakarta antialiased;
+  }
+}
+
+@layer utilities {
+  .streak-color {
+    color: hsl(var(--streak));
+  }
+
+  .streak-bg {
+    background-color: hsl(var(--streak) / 0.15);
+  }
+
+  .streak-border {
+    border-color: hsl(var(--streak) / 0.3);
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-xl border border-border/60;
+  }
+
+  .thumb-cta {
+    @apply w-full h-16 rounded-3xl text-lg font-extrabold shadow-2xl transition-all duration-200 active:scale-95;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
+  }
+
+  /* Confetti animation for level up celebration */
+  @keyframes confetti {
+    0% {
+      transform: translateY(0) rotate(0deg);
+      opacity: 1;
+    }
+
+    100% {
+      transform: translateY(-100px) rotate(360deg);
+      opacity: 0;
+    }
+  }
+}

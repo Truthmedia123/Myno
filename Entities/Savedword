@@ -1,0 +1,32 @@
+{
+  "name": "SavedWord",
+  "type": "object",
+  "properties": {
+    "word": {
+      "type": "string"
+    },
+    "definition": {
+      "type": "string"
+    },
+    "example_sentence": {
+      "type": "string"
+    },
+    "phonetic": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string",
+      "default": "en"
+    },
+    "mastery_level": {
+      "type": "number",
+      "default": 0
+    },
+    "from_session": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "word"
+  ]
+}

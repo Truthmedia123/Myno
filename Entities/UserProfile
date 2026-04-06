@@ -1,0 +1,43 @@
+{
+  "name": "UserProfile",
+  "type": "object",
+  "properties": {
+    "target_language": {
+      "type": "string"
+    },
+    "native_language": {
+      "type": "string"
+    },
+    "learning_goal": {
+      "type": "string"
+    },
+    "fluency_score": {
+      "type": "number",
+      "default": 0
+    },
+    "daily_streak": {
+      "type": "number",
+      "default": 0
+    },
+    "words_mastered": {
+      "type": "number",
+      "default": 0
+    },
+    "onboarding_complete": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_pro": {
+      "type": "boolean",
+      "default": false
+    },
+    "last_session_date": {
+      "type": "string"
+    },
+    "streak_reminder_hour": {
+      "type": "number",
+      "default": 18
+    }
+  },
+  "required": []
+}
