@@ -8,6 +8,7 @@ import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SpeakerWaveIcon } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
+import MynoAvatar from '../ui/MynoAvatar';
 
 /**
  * @typedef {Object} Message
@@ -15,6 +16,8 @@ import { cn } from '@/lib/utils';
  * @property {string} content - Message text
  * @property {Object} [parsed] - Parsed agent response
  * @property {string} [id] - Unique identifier
+ * @property {boolean} [isCorrection] - Whether message contains a correction
+ * @property {boolean} [isCelebration] - Whether message contains celebration
  */
 
 /**
@@ -25,6 +28,18 @@ import { cn } from '@/lib/utils';
  * @property {string} emoji - Emoji representation
  * @property {number} confidence - Confidence score (0-1)
  */
+
+/**
+ * Determine mascot state based on message metadata
+ * @param {Message} message - Message object
+ * @returns {keyof import('../../data/mynoMascot').MYNO_STATES}
+ */
+function getMascotState(message) {
+    if (message.isCelebration) return 'celebrating';
+    if (message.isCorrection) return 'correcting';
+    if (message.role === 'assistant') return 'thinking';
+    return 'encouraging';
+}
 
 /**
  * @param {Object} props
@@ -47,6 +62,8 @@ const MessageList = memo(function MessageList({
     shareContent,
     getShareText
 }) {
+    const targetLanguage = profile?.target_language || 'English';
+
     return (
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 scroll-smooth" id="message-list">
             <AnimatePresence initial={false}>
@@ -58,10 +75,21 @@ const MessageList = memo(function MessageList({
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.3 }}
                         className={cn(
-                            'flex',
+                            'flex items-start gap-3',
                             msg.role === 'user' ? 'justify-end' : 'justify-start'
                         )}
                     >
+                        {/* Mascot avatar for AI messages */}
+                        {msg.role === 'assistant' && (
+                            <div className="flex-shrink-0 mt-1" aria-hidden="true">
+                                <MynoAvatar
+                                    state={getMascotState(msg)}
+                                    targetLanguage={targetLanguage}
+                                    size="sm"
+                                />
+                            </div>
+                        )}
+
                         <div
                             className={cn(
                                 'max-w-[85%] rounded-3xl px-4 py-3',
@@ -112,6 +140,9 @@ const MessageList = memo(function MessageList({
                                 </>
                             )}
                         </div>
+
+                        {/* Empty space for user messages to maintain alignment */}
+                        {msg.role === 'user' && <div className="w-12 flex-shrink-0" />}
                     </motion.div>
                 ))}
             </AnimatePresence>
@@ -129,7 +160,14 @@ const MessageList = memo(function MessageList({
             )}
 
             {isLoading && (
-                <div className="flex justify-start">
+                <div className="flex justify-start items-start gap-3">
+                    <div className="flex-shrink-0 mt-1">
+                        <MynoAvatar
+                            state="thinking"
+                            targetLanguage={targetLanguage}
+                            size="sm"
+                        />
+                    </div>
                     <div className="bg-card border border-border rounded-3xl rounded-bl-sm px-4 py-3">
                         <div className="flex gap-1.5 items-center">
                             <div

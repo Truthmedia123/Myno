@@ -65,6 +65,31 @@ module.exports = {
         'green-flash': {
           '0%, 100%': { backgroundColor: 'transparent' },
           '50%': { backgroundColor: 'rgba(152, 255, 216, 0.3)' }
+        },
+        'shake': {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
+          '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' }
+        },
+        // New mascot animations
+        'pulse': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' }
+        },
+        'spin': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' }
+        },
+        'ping': {
+          '75%, 100%': { transform: 'scale(2)', opacity: '0' }
+        },
+        'bounce': {
+          '0%, 100%': { transform: 'translateY(-25%)', animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)' },
+          '50%': { transform: 'translateY(0)', animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)' }
+        },
+        'fade-in': {
+          from: { opacity: '0', transform: 'translateY(10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
         }
       },
       animation: {
@@ -76,7 +101,14 @@ module.exports = {
         'slide-up-bounce': 'slide-up-bounce 0.5s ease-out',
         'scale-on-press': 'scale-on-press 0.2s ease-in-out',
         'bounce-dot': 'bounce-dot 0.6s ease-in-out infinite',
-        'green-flash': 'green-flash 0.5s ease-out'
+        'green-flash': 'green-flash 0.5s ease-out',
+        'shake': 'shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both',
+        // New mascot animations
+        'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spin': 'spin 1s linear infinite',
+        'ping': 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'bounce': 'bounce 1s infinite',
+        'fade-in': 'fade-in 0.3s ease-out'
       },
     },
   },
