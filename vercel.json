@@ -1,0 +1,89 @@
+{
+    "version": 2,
+    "outputDirectory": "dist",
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev",
+    "installCommand": "npm ci",
+    "framework": "vite",
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/service-worker.js",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "no-cache, no-store, must-revalidate"
+                },
+                {
+                    "key": "Service-Worker-Allowed",
+                    "value": "/"
+                }
+            ]
+        },
+        {
+            "source": "/assets/(.*)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=31536000, immutable"
+                }
+            ]
+        },
+        {
+            "source": "/(.*).(js|css|woff2|woff|ttf|eot|svg|png|jpg|jpeg|gif|ico|webp)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=31536000, immutable"
+                }
+            ]
+        }
+    ],
+    "env": {
+        "VITE_GROQ_API_KEY": {
+            "description": "Groq API key for AI language model calls. Get from https://console.groq.com",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_API_KEY": {
+            "description": "Firebase API key for authentication and database",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_AUTH_DOMAIN": {
+            "description": "Firebase authentication domain",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_PROJECT_ID": {
+            "description": "Firebase project ID",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_STORAGE_BUCKET": {
+            "description": "Firebase storage bucket",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_MESSAGING_SENDER_ID": {
+            "description": "Firebase messaging sender ID",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_APP_ID": {
+            "description": "Firebase app ID",
+            "type": "encrypted"
+        },
+        "VITE_FIREBASE_MEASUREMENT_ID": {
+            "description": "Firebase measurement ID (optional)",
+            "type": "encrypted"
+        }
+    },
+    "regions": [
+        "iad1"
+    ],
+    "public": true,
+    "github": {
+        "silent": true,
+        "autoAlias": true
+    }
+}
