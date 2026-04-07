@@ -1,20 +1,8 @@
-/**
- * Memory manager with FSRS (Free Spaced Repetition System) for mistake tracking,
- * phoneme detection, and topic extraction.
- * Strictly $0 budget: uses Firestore free tier + localStorage fallback.
- * @module memoryManager
- */
-
-import { collection, addDoc, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
-import { callGroq } from './groqClient';
-
-// FSRS integration - using mock scheduler (fsrs package not available)
-const FSRS = null;
-console.info('Using mock FSRS scheduler for $0 budget constraint');
+import { collection, addDoc, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
 
 /**
- * Store a user mistake with FSRS scheduling.
+ * Store a user mistake in Firestore for future reference
  * @param {string} userId - The user's UID
  * @param {string} mistake - The incorrect phrase/sentence the user said
  * @param {string} correction - The correct version
@@ -24,10 +12,7 @@ console.info('Using mock FSRS scheduler for $0 budget constraint');
  */
 export async function storeMistake(userId, mistake, correction, explanation, language) {
     try {
-        // FSRS initial card (mock scheduler only)
-        const fsrsData = { difficulty: 0, stability: 0, nextReview: null };
-
-        const docRef = await addDoc(collection(db, 'userMistakes'), {
+        const docRef = await addDoc(collection(db, "userMistakes"), {
             userId,
             mistake,
             correction,
@@ -35,53 +20,18 @@ export async function storeMistake(userId, mistake, correction, explanation, lan
             language,
             timestamp: new Date().toISOString(),
             reviewed: false,
-            recurrenceCount: 0,
-            fsrs: fsrsData,
-            lastReviewed: null,
-            intervalDays: 1
+            recurrenceCount: 0
         });
-        console.log('Mistake stored with ID:', docRef.id);
-
-        // Update local cache
-        const cacheKey = `mistakes_${userId}`;
-        const cached = localStorage.getItem(cacheKey);
-        const mistakes = cached ? JSON.parse(cached) : [];
-        mistakes.push({
-            id: docRef.id,
-            mistake,
-            correction,
-            explanation,
-            language,
-            timestamp: new Date().toISOString(),
-            fsrs: fsrsData
-        });
-        localStorage.setItem(cacheKey, JSON.stringify(mistakes));
-
+        console.log("Mistake stored with ID:", docRef.id);
         return docRef.id;
     } catch (error) {
-        console.error('Error storing mistake:', error);
-        // Fallback to localStorage only
-        const fallbackId = 'local_' + Date.now();
-        const fsrsData = { difficulty: 0, stability: 0, nextReview: null };
-        const cacheKey = `mistakes_${userId}`;
-        const cached = localStorage.getItem(cacheKey);
-        const mistakes = cached ? JSON.parse(cached) : [];
-        mistakes.push({
-            id: fallbackId,
-            mistake,
-            correction,
-            explanation,
-            language,
-            timestamp: new Date().toISOString(),
-            fsrs: fsrsData
-        });
-        localStorage.setItem(cacheKey, JSON.stringify(mistakes));
-        return fallbackId;
+        console.error("Error storing mistake:", error);
+        throw error;
     }
 }
 
 /**
- * Retrieve recent mistakes for a user (last 7 days, max 10) with FSRS scheduling.
+ * Retrieve recent mistakes for a user (last 7 days, max 10)
  * @param {string} userId - The user's UID
  * @param {string} language - Target language (optional filter)
  * @returns {Promise<Array>} Array of mistake objects
@@ -89,18 +39,18 @@ export async function storeMistake(userId, mistake, correction, explanation, lan
 export async function getRecentMistakes(userId, language = null) {
     try {
         let q = query(
-            collection(db, 'userMistakes'),
-            where('userId', '==', userId),
-            orderBy('timestamp', 'desc'),
+            collection(db, "userMistakes"),
+            where("userId", "==", userId),
+            orderBy("timestamp", "desc"),
             limit(10)
         );
 
         if (language) {
             q = query(
-                collection(db, 'userMistakes'),
-                where('userId', '==', userId),
-                where('language', '==', language),
-                orderBy('timestamp', 'desc'),
+                collection(db, "userMistakes"),
+                where("userId", "==", userId),
+                where("language", "==", language),
+                orderBy("timestamp", "desc"),
                 limit(10)
             );
         }
@@ -112,69 +62,34 @@ export async function getRecentMistakes(userId, language = null) {
         });
         return mistakes;
     } catch (error) {
-        console.error('Error retrieving mistakes:', error);
-        // Fallback to localStorage
-        const cacheKey = `mistakes_${userId}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-            const mistakes = JSON.parse(cached);
-            const filtered = language
-                ? mistakes.filter(m => m.language === language)
-                : mistakes;
-            return filtered.slice(0, 10);
-        }
+        console.error("Error retrieving mistakes:", error);
         return [];
     }
 }
 
 /**
- * Mark a mistake as reviewed with FSRS update.
+ * Mark a mistake as reviewed (user has practiced it)
  * @param {string} mistakeId - Document ID of the mistake
  * @param {boolean} correct - Whether the user got it right this time
  */
 export async function markMistakeReviewed(mistakeId, correct = true) {
-    try {
-        const mistakeRef = doc(db, 'userMistakes', mistakeId);
-        const mistakeSnap = await getDoc(mistakeRef);
-        if (!mistakeSnap.exists()) {
-            console.warn('Mistake not found:', mistakeId);
-            return;
-        }
-
-        const data = mistakeSnap.data();
-        const fsrs = data.fsrs || { difficulty: 0, stability: 0, nextReview: null };
-
-        // Update FSRS card using mock scheduler (fsrs package not available)
-        fsrs.difficulty = Math.min(1, fsrs.difficulty + (correct ? -0.1 : 0.2));
-        fsrs.stability = Math.max(0.1, fsrs.stability * (correct ? 1.5 : 0.7));
-        fsrs.nextReview = new Date(Date.now() + fsrs.stability * 24 * 60 * 60 * 1000).toISOString();
-
-        await setDoc(mistakeRef, {
-            reviewed: true,
-            recurrenceCount: (data.recurrenceCount || 0) + 1,
-            lastReviewed: new Date().toISOString(),
-            fsrs,
-            intervalDays: Math.round(fsrs.stability)
-        }, { merge: true });
-
-        console.log(`Mistake ${mistakeId} marked as reviewed (correct: ${correct})`);
-    } catch (error) {
-        console.error('Error marking mistake reviewed:', error);
-    }
+    // This would typically update the mistake document
+    // For now, we'll just log it
+    console.log(`Mistake ${mistakeId} marked as reviewed (correct: ${correct})`);
 }
 
 /**
- * Generate a memory context string for the AI system prompt.
+ * Generate a memory context string for the AI system prompt
  * @param {Array} mistakes - Array of recent mistake objects
  * @returns {string} Formatted context string for the AI
  */
 export function generateMemoryContext(mistakes) {
     if (!mistakes || mistakes.length === 0) {
-        return '';
+        return "";
     }
 
-    const recentMistakes = mistakes.slice(0, 5);
-    let context = '\n\n## Past Mistakes to Remember:\n';
+    const recentMistakes = mistakes.slice(0, 5); // Take top 5 most recent
+    let context = "\n\n## Past Mistakes to Remember:\n";
 
     recentMistakes.forEach((mistake, index) => {
         context += `${index + 1}. User often says: "${mistake.mistake}"\n`;
@@ -182,34 +97,37 @@ export function generateMemoryContext(mistakes) {
         context += `   Reason: ${mistake.explanation}\n\n`;
     });
 
-    context += 'Gently remind the user of these patterns if they make similar mistakes again.';
+    context += "Gently remind the user of these patterns if they make similar mistakes again.";
     return context;
 }
 
 /**
- * Extract mistake from AI correction message and store it.
+ * Extract mistake from AI correction message and store it
  * @param {string} userId - The user's UID
  * @param {string} userMessage - What the user said
  * @param {string} aiResponse - AI's response that contains correction
  * @param {string} language - Target language
  */
 export async function extractAndStoreMistake(userId, userMessage, aiResponse, language) {
+    // Simple heuristic: look for "Pro Tip" or correction patterns in AI response
     const proTipMatch = aiResponse.match(/Pro Tip[^:]*:\s*(.+)/i);
     if (proTipMatch) {
         const explanation = proTipMatch[1].trim();
 
+        // Try to identify what was corrected (simplified logic)
+        // In a real implementation, you'd want more sophisticated parsing
         const correctionMatch = aiResponse.match(/should be\s*["']([^"']+)["']/i) ||
             aiResponse.match(/correct.*["']([^"']+)["']/i);
 
-        const correction = correctionMatch ? correctionMatch[1] : 'See explanation above';
+        const correction = correctionMatch ? correctionMatch[1] : "See explanation above";
 
         await storeMistake(userId, userMessage, correction, explanation, language);
     }
 }
 
 /**
- * Update user memory with topics extracted from conversation using Groq.
- * Language‑neutral: uses Groq to extract topics from any language.
+ * Update user memory with topics extracted from conversation using Groq
+ * Language‑neutral: uses Groq to extract topics from any language
  * @param {object} db - Firestore database instance
  * @param {string} userId - User's UID
  * @param {string} aiResponse - Latest AI response
@@ -220,24 +138,43 @@ export async function extractAndStoreMistake(userId, userMessage, aiResponse, la
 export async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession, targetLanguage, nativeLanguage) {
     try {
         // Combine recent user messages and AI response for context
-        const recentText = userMessagesThisSession.slice(-3).join(' ') + ' ' + aiResponse;
+        const recentText = userMessagesThisSession.slice(-3).join(" ") + " " + aiResponse;
 
         // Call Groq to extract topics in a language‑neutral way
-        const topicsText = await callGroq([
-            {
-                role: 'system',
-                content: `You are a topic extraction assistant. Analyze the following conversation snippet and extract 3‑5 main topics or themes that the user is practicing or discussing. Return ONLY a JSON array of topic strings, no other text. Example: ["greetings", "food vocabulary", "past tense"]`
+        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+                "Content-Type": "application/json"
             },
-            {
-                role: 'user',
-                content: `Conversation snippet: ${recentText}\n\nExtract topics:`
-            }
-        ], { temperature: 0.3, max_tokens: 100 });
+            body: JSON.stringify({
+                model: "mixtral-8x7b-32768",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a topic extraction assistant. Analyze the following conversation snippet and extract 3‑5 main topics or themes that the user is practicing or discussing. Return ONLY a JSON array of topic strings, no other text. Example: ["greetings", "food vocabulary", "past tense"]`
+                    },
+                    {
+                        role: "user",
+                        content: `Conversation snippet: ${recentText}\n\nExtract topics:`
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 100
+            })
+        });
 
-        const topics = JSON.parse(topicsText);
+        if (!groqResponse.ok) {
+            console.warn("Groq topic extraction failed, falling back to simple detection");
+            return await fallbackTopicDetection(db, userId, aiResponse, targetLanguage, nativeLanguage);
+        }
+
+        const data = await groqResponse.json();
+        const topics = JSON.parse(data.choices[0].message.content);
 
         // Merge topics into userMemory document
-        const memoryRef = doc(db, 'userMemory', userId);
+        const { doc, getDoc, setDoc } = await import("firebase/firestore");
+        const memoryRef = doc(db, "userMemory", userId);
         const memorySnap = await getDoc(memoryRef);
 
         const existing = memorySnap.exists() ? memorySnap.data() : {};
@@ -261,28 +198,28 @@ export async function updateUserMemory(db, userId, aiResponse, userMessagesThisS
             nativeLanguage
         }, { merge: true });
 
-        console.log('User memory updated with topics:', trimmedTopics);
+        console.log("User memory updated with topics:", trimmedTopics);
         return trimmedTopics;
     } catch (error) {
-        console.error('Error updating user memory:', error);
+        console.error("Error updating user memory:", error);
         // Fallback to simple detection
         return await fallbackTopicDetection(db, userId, aiResponse, targetLanguage, nativeLanguage);
     }
 }
 
 /**
- * Fallback topic detection using simple keyword matching (English‑centric).
- * Used when Groq fails.
+ * Fallback topic detection using simple keyword matching (English‑centric)
+ * Used when Groq fails
  */
 async function fallbackTopicDetection(db, userId, aiResponse, targetLanguage, nativeLanguage) {
     const englishKeywords = {
-        greetings: ['hello', 'hi', 'good morning', 'hey', 'greetings'],
-        food: ['food', 'restaurant', 'eat', 'drink', 'menu', 'hungry', 'breakfast', 'lunch', 'dinner'],
-        travel: ['travel', 'airport', 'hotel', 'train', 'bus', 'taxi', 'directions', 'map'],
-        shopping: ['shop', 'buy', 'price', 'cost', 'expensive', 'cheap', 'market', 'store'],
-        family: ['family', 'mother', 'father', 'sister', 'brother', 'parents', 'children'],
-        work: ['work', 'job', 'office', 'meeting', 'colleague', 'boss', 'project'],
-        time: ['time', 'clock', 'hour', 'minute', 'today', 'tomorrow', 'yesterday', 'week', 'month']
+        greetings: ["hello", "hi", "good morning", "hey", "greetings"],
+        food: ["food", "restaurant", "eat", "drink", "menu", "hungry", "breakfast", "lunch", "dinner"],
+        travel: ["travel", "airport", "hotel", "train", "bus", "taxi", "directions", "map"],
+        shopping: ["shop", "buy", "price", "cost", "expensive", "cheap", "market", "store"],
+        family: ["family", "mother", "father", "sister", "brother", "parents", "children"],
+        work: ["work", "job", "office", "meeting", "colleague", "boss", "project"],
+        time: ["time", "clock", "hour", "minute", "today", "tomorrow", "yesterday", "week", "month"]
     };
 
     const detectedTopics = [];
@@ -295,11 +232,12 @@ async function fallbackTopicDetection(db, userId, aiResponse, targetLanguage, na
     }
 
     if (detectedTopics.length === 0) {
-        detectedTopics.push('general conversation');
+        detectedTopics.push("general conversation");
     }
 
     // Save to Firestore
-    const memoryRef = doc(db, 'userMemory', userId);
+    const { doc, getDoc, setDoc } = await import("firebase/firestore");
+    const memoryRef = doc(db, "userMemory", userId);
     const memorySnap = await getDoc(memoryRef);
 
     const existing = memorySnap.exists() ? memorySnap.data() : {};
@@ -313,14 +251,15 @@ async function fallbackTopicDetection(db, userId, aiResponse, targetLanguage, na
         nativeLanguage
     }, { merge: true });
 
-    console.log('Fallback topics saved:', detectedTopics);
+    console.log("Fallback topics saved:", detectedTopics);
     return updatedTopics;
 }
 
 /**
- * Detect weak phonemes based on language and native language.
- * @param {string} targetLanguage - Target language
- * @param {string} nativeLanguage - User's native language
+ * Detect weak phonemes based on language and native language
+ * @param {string} language - Target language
+ * @param {Array} lowScoreTranscripts - Array of transcripts with low pronunciation scores
+ * @param {string} nativeLanguage - User's native language (optional)
  * @returns {Array} Array of weak phoneme descriptions
  */
 export function detectWeakPhonemes(targetLanguage, nativeLanguage) {
@@ -454,51 +393,6 @@ export async function getUserMemory(db, userId) {
 }
 
 /**
- * Schedule vocabulary review using FSRS (Free Spaced Repetition System)
- * @param {string} word - The vocabulary word/phrase
- * @param {number} rating - User rating (1=again, 2=hard, 3=good, 4=easy)
- * @returns {Object} Scheduling data with nextReview, difficulty, stability, reps
- */
-export function scheduleVocabReview(word, rating) {
-    try {
-        // Mock FSRS scheduler for $0 budget (fsrs package not available)
-        const now = new Date();
-        const baseInterval = [1, 3, 7, 14, 30, 60]; // days
-
-        // Simple algorithm based on rating
-        const difficulty = Math.max(0.1, Math.min(1, 0.5 + (rating - 3) * 0.2));
-        const stability = Math.max(0.5, Math.min(10, 2 * Math.pow(1.5, rating - 1)));
-        const reps = rating >= 3 ? 1 : 0;
-
-        // Calculate next review date
-        const intervalIndex = Math.min(reps, baseInterval.length - 1);
-        const days = baseInterval[intervalIndex] * stability;
-        const nextReview = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-
-        return {
-            nextReview: nextReview.toISOString(),
-            difficulty,
-            stability,
-            reps: reps + 1,
-            word,
-            scheduledAt: now.toISOString()
-        };
-    } catch (error) {
-        console.warn('FSRS scheduling failed, using fallback:', error);
-        // Fallback: simple 24-hour interval
-        const nextReview = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        return {
-            nextReview: nextReview.toISOString(),
-            difficulty: 0.5,
-            stability: 1,
-            reps: 1,
-            word,
-            scheduledAt: new Date().toISOString()
-        };
-    }
-}
-
-/**
  * Save weak phonemes to userMemory collection in Firestore
  * @param {object} db - Firestore database instance
  * @param {string} userId - User's UID
@@ -508,6 +402,3 @@ export async function saveWeakPhonemes(db, userId, phonemes) {
     const { doc, setDoc } = await import("firebase/firestore");
     await setDoc(doc(db, "userMemory", userId), { weakPhonemes: phonemes }, { merge: true });
 }
-
-// Re-export key functions with requested names
-export { updateUserMemory, detectWeakPhonemes as getWeakPhonemes, scheduleVocabReview };
