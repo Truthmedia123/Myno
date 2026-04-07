@@ -6,6 +6,7 @@
  */
 
 import { SCENARIOS } from '../data/scenarios.js';
+import { LEARNING_GOALS, filterScenariosByGoal, getGoalById } from '../data/learningGoals.js';
 
 /**
  * Get user profile from localStorage if not provided.
@@ -32,7 +33,8 @@ function ensureUserProfile(userProfile) {
         xp: 0,
         target_language: 'English',
         native_language: 'English',
-        cefrLevel: 'A1'
+        cefrLevel: 'A1',
+        learningGoal: 'travel' // Default learning goal
     };
 }
 
@@ -49,18 +51,22 @@ function saveUserProfile(profile) {
 }
 
 /**
- * Get all scenarios available to the user based on completed prerequisites.
+ * Get all scenarios available to the user based on completed prerequisites and learning goal.
  * @param {Object|null} userProfile - User profile (optional, falls back to localStorage)
  * @returns {Array<Object>} Available scenarios
  */
 export function getAvailableScenarios(userProfile = null) {
     const profile = ensureUserProfile(userProfile);
     const completed = profile.completedScenarios || [];
+    const learningGoal = profile.learningGoal || 'travel';
 
-    return SCENARIOS.filter(scenario => {
-        // Check all prerequisites are completed
+    // First filter by prerequisites
+    const prerequisiteFiltered = SCENARIOS.filter(scenario => {
         return scenario.prerequisites.every(prereq => completed.includes(prereq));
     });
+
+    // Then filter by learning goal and CEFR level
+    return filterScenariosByGoal(prerequisiteFiltered, learningGoal, profile.cefrLevel || 'A1');
 }
 
 /**
@@ -147,6 +153,43 @@ export function markScenarioComplete(scenarioId, userProfile = null) {
  */
 export function getScenarioById(scenarioId) {
     return SCENARIOS.find(s => s.id === scenarioId) || null;
+}
+
+/**
+ * Get learning goal description by ID.
+ * @param {string} goalId - Learning goal identifier
+ * @returns {string} Description or empty string if not found
+ */
+export function getGoalDescription(goalId) {
+    const goal = getGoalById(goalId);
+    return goal ? goal.description : '';
+}
+
+/**
+ * Get scenarios filtered by learning goal.
+ * @param {string} goalId - Learning goal identifier
+ * @param {string} cefrLevel - User's CEFR level
+ * @returns {Array<Object>} Filtered scenarios
+ */
+export function getScenariosByGoal(goalId, cefrLevel = 'A1') {
+    return filterScenariosByGoal(SCENARIOS, goalId, cefrLevel);
+}
+
+/**
+ * Update user's learning goal.
+ * @param {string} goalId - New learning goal ID
+ * @param {Object|null} userProfile - Current user profile (optional)
+ * @returns {Object} Updated user profile
+ */
+export function updateLearningGoal(goalId, userProfile = null) {
+    const profile = ensureUserProfile(userProfile);
+    const updatedProfile = {
+        ...profile,
+        learningGoal: goalId
+    };
+
+    saveUserProfile(updatedProfile);
+    return updatedProfile;
 }
 
 /**
