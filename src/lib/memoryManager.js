@@ -217,7 +217,7 @@ export async function extractAndStoreMistake(userId, userMessage, aiResponse, la
  * @param {string} targetLanguage - User's target language (e.g., "Spanish")
  * @param {string} nativeLanguage - User's native language (e.g., "English")
  */
-export async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession, targetLanguage, nativeLanguage) {
+async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession, targetLanguage, nativeLanguage) {
     try {
         // Combine recent user messages and AI response for context
         const recentText = userMessagesThisSession.slice(-3).join(' ') + ' ' + aiResponse;
@@ -459,7 +459,7 @@ export async function getUserMemory(db, userId) {
  * @param {number} rating - User rating (1=again, 2=hard, 3=good, 4=easy)
  * @returns {Object} Scheduling data with nextReview, difficulty, stability, reps
  */
-export function scheduleVocabReview(word, rating) {
+function scheduleVocabReview(word, rating) {
     try {
         // Mock FSRS scheduler for $0 budget (fsrs package not available)
         const now = new Date();
