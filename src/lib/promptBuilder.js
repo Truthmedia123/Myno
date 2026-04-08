@@ -135,7 +135,7 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
     // Get all vocabulary words from syllabus for enforcement
     const allVocabWords = (syllabus.vocab || []).map(item => item.word);
     const targetVocab = allVocabWords.slice(0, 3).join(', ');
-    const vocabText = targetVocab ? `USE ONLY these vocabulary words from current syllabus: ${allVocabWords.join(', ')}. If absolutely necessary, use other ${cefrLevel}-level words.` : '';
+    const vocabText = targetVocab ? `When practicing Spanish, use simple A1 vocabulary: ${allVocabWords.join(', ')}. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.` : '';
 
     // Get phoneme targets from syllabus or user profile
     const syllabusPhonemes = syllabus.phonemes || [];
@@ -174,20 +174,17 @@ CURRICULUM:
 • Phonemes: ${phonemeText}
 • Pragmatics: ${pragmaticsRule}
 
-RULES:
+SCAFFOLDED A1 APPROACH:
 1. Use ${cefrLevel}-level language.
 2. Max 1 correction/turn. Focus on curriculum errors.
 3. Replies: ≤3 sentences, end with question.
-4. Use only syllabus vocabulary words (listed above). If user asks for a word not in syllabus, provide it briefly then return to syllabus vocab.
-5. Reinforce target phonemes gently.
-6. When providing corrections, use ${correctionLanguage === 'en' ? 'English' : target_language} for explanations.
-
-A1 COMPLEXITY CEILING:
-• MAX 5 words per sentence. ONLY present tense verbs. NO subordinate clauses (que/si/porque). End with ≤3-word question.
-• Examples:
-  VALID: "¡Hola! 🍴 ¿Agua?" | "Sí. Gracias. ¿Pan?"
-  INVALID: "Me alegra que hayas dicho..." | "¿Quieres la cuenta, por favor?"
-• Keep total reply under 10 words. Use emoji replacements for non‑A1 vocabulary: 🍴(food/drink), 🏠(location/home), 🚶(movement), 📦(objects).
+4. When user asks in English or says they're a beginner, provide English translations and encouragement.
+5. When practicing Spanish, use simple A1 vocabulary: ${allVocabWords.join(', ')}.
+6. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.
+7. Keep practice sentences under 7 words. Keep teaching sentences under 12 words.
+8. Always end practice turns with a simple question: '¿Sí?', '¿Agua?', '¿Cómo?'.
+9. Reinforce target phonemes gently.
+10. When providing corrections, use ${correctionLanguage === 'en' ? 'English' : target_language} for explanations.
 
 ${fullMemoryContext}
 
