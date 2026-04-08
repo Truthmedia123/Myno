@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeftIcon, PaperAirplaneIcon, MicrophoneIcon, StopIcon, SpeakerWaveIcon, ArrowPathIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
+import { usePhonemeFeedback } from "@/hooks/usePhonemeFeedback";
 import { invokeGeminiChat } from "@/lib/gemini";
 import { getChatStyle, getDrills, getSessionConfig, createVocabTracker } from "@/lib/curriculum";
-import { cn, shareContent, getShareText, parseAgentResponse } from "@/lib/utils";
+import { cn, shareContent, getShareText } from "@/lib/utils";
 import { addXP, XP_VALUES } from "@/lib/xpSystem";
 import { updateDailyStreak } from "@/lib/streakManager";
 import { getRecentMistakes, generateMemoryContext, extractAndStoreMistake, detectWeakPhonemes, saveWeakPhonemes, updateUserMemory } from "@/lib/memoryManager";
@@ -69,6 +70,9 @@ export default function Chat() {
   const [showPersonalityPicker, setShowPersonalityPicker] = useState(false);
   const [wordsIntroduced, setWordsIntroduced] = useState([]);
   const [currentLevel, setCurrentLevel] = useState(1);
+  const [nextQuestion, setNextQuestion] = useState("");
+  const [correctionLanguage, setCorrectionLanguage] = useState("en"); // 'en' or target language code
+  const [phonemeCorrection, setPhonemeCorrection] = useState(null); // AI correction with phonemeTip
   const [wordsUsedByUser, setWordsUsedByUser] = useState(new Set());
   // Curriculum system state
   const [currentSyllabus, setCurrentSyllabus] = useState(null);
@@ -80,6 +84,12 @@ export default function Chat() {
   const vocabReviewShown = useRef(false);
   const lowScoreRef = useRef(0);
   const dbActions = useFirebaseDatabase();
+
+  // Phoneme feedback toast
+  const { showToast, tip, phonemeName, dismiss } = usePhonemeFeedback(
+    phonemeCorrection,
+    profile?.target_language || 'en'
+  );
 
   const getOrCreateSessionId = () => {
     let sid = sessionStorage.getItem("myno_session_id");
@@ -99,7 +109,51 @@ export default function Chat() {
     return { label: "Needs Work", color: "text-red-400", bg: "bg-red-400/10", emoji: "⚠️" };
   };
 
+  // Parse AI response JSON with fallback to raw text
+  const parseAIResponse = (rawText) => {
+    // Extract JSON block using regex: /\{[\s\S]*\}/
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      // No JSON found, treat entire text as reply
+      return {
+        reply: rawText.trim(),
+        correction: null,
+        nextQuestion: ""
+      };
+    }
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      // Ensure required fields
+      return {
+        reply: parsed.reply || rawText.trim(),
+        correction: parsed.correction || null,
+        nextQuestion: parsed.nextQuestion || ""
+      };
+    } catch (error) {
+      console.warn('Failed to parse AI JSON, falling back to raw text:', error);
+      return {
+        reply: rawText.trim(),
+        correction: null,
+        nextQuestion: ""
+      };
+    }
+  };
 
+  // Detect scenario from user message
+  const detectScenarioFromMessage = (msg) => {
+    if (!msg) return null;
+    const lowerMsg = msg.toLowerCase();
+    // Try to match by scenario prompt (exact match)
+    const matched = SCENARIOS.find(s => s.prompt.toLowerCase() === lowerMsg);
+    if (matched) return matched;
+    // Fallback: match by label or id in message
+    for (const scenario of SCENARIOS) {
+      if (lowerMsg.includes(scenario.id) || lowerMsg.includes(scenario.label.toLowerCase())) {
+        return scenario;
+      }
+    }
+    return null;
+  };
 
   // Fetch words for spaced repetition review
   const fetchVaultWordsForReview = async (userId) => {
@@ -208,47 +262,87 @@ Return ONLY a valid JSON object with these exact keys: title, intro, examples (a
   // Initialize sessionId synchronously to ensure it's available immediately
   const [sessionId] = useState(() => getOrCreateSessionId());
 
-  // Scenario definitions
+  // Scenario definitions with enhanced fields for curriculum prompt
   const SCENARIOS = [
     {
       id: "restaurant", label: "Restaurant", icon: "🍽️",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a restaurant scenario. You are the waiter, I am the customer. Greet me in ${profile?.target_language || "English"} and take my order. If I make a mistake, give a quick Pro Tip in ${profile?.native_language || "English"}.`
+      title: "Restaurant Ordering",
+      cefr: "A1",
+      tone: "casual",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a restaurant scenario. You are the waiter, I am the customer. Greet me in ${profile?.target_language || "English"} and take my order. If I make a mistake, give a quick Pro Tip in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a restaurant scenario. You are the waiter, I am the customer. Greet me in ${profile?.target_language || "English"} and take my order. If I make a mistake, give a quick Pro Tip in ${profile?.native_language || "English"}.`
     },
     {
       id: "airport", label: "Airport", icon: "✈️",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at an airport check-in counter. You are the airline staff, I am the passenger. Start in ${profile?.target_language || "English"}. Correct my mistakes gently in ${profile?.native_language || "English"}.`
+      title: "Airport Check-in",
+      cefr: "A1",
+      tone: "formal",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at an airport check-in counter. You are the airline staff, I am the passenger. Start in ${profile?.target_language || "English"}. Correct my mistakes gently in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are at an airport check-in counter. You are the airline staff, I am the passenger. Start in ${profile?.target_language || "English"}. Correct my mistakes gently in ${profile?.native_language || "English"}.`
     },
     {
       id: "interview", label: "Job Interview", icon: "💼",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a job interview for a marketing role. You are the interviewer, I am the candidate. Ask me questions in ${profile?.target_language || "English"}. Correct grammar mistakes in ${profile?.native_language || "English"}.`
+      title: "Job Interview",
+      cefr: "A2",
+      tone: "formal",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a job interview for a marketing role. You are the interviewer, I am the candidate. Ask me questions in ${profile?.target_language || "English"}. Correct grammar mistakes in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are doing a job interview for a marketing role. You are the interviewer, I am the candidate. Ask me questions in ${profile?.target_language || "English"}. Correct grammar mistakes in ${profile?.native_language || "English"}.`
     },
     {
       id: "hotel", label: "Hotel", icon: "🏨",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a hotel reception. You are the receptionist, I am a guest checking in. Speak ${profile?.target_language || "English"} throughout. Correct my errors in ${profile?.native_language || "English"}.`
+      title: "Hotel Check-in",
+      cefr: "A1",
+      tone: "formal",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a hotel reception. You are the receptionist, I am a guest checking in. Speak ${profile?.target_language || "English"} throughout. Correct my errors in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a hotel reception. You are the receptionist, I am a guest checking in. Speak ${profile?.target_language || "English"} throughout. Correct my errors in ${profile?.native_language || "English"}.`
     },
     {
       id: "shopping", label: "Shopping", icon: "🛍️",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a local market. You are the shopkeeper, I want to buy something and negotiate. Use ${profile?.target_language || "English"} only. Correct my mistakes in ${profile?.native_language || "English"}.`
+      title: "Market Shopping",
+      cefr: "A1",
+      tone: "casual",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a local market. You are the shopkeeper, I want to buy something and negotiate. Use ${profile?.target_language || "English"} only. Correct my mistakes in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a local market. You are the shopkeeper, I want to buy something and negotiate. Use ${profile?.target_language || "English"} only. Correct my mistakes in ${profile?.native_language || "English"}.`
     },
     {
       id: "doctor", label: "Doctor Visit", icon: "🏥",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a doctor's clinic. You are the doctor, I am the patient. Speak ${profile?.target_language || "English"} throughout. If I struggle, help in ${profile?.native_language || "English"}.`
+      title: "Doctor Visit",
+      cefr: "A2",
+      tone: "formal",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a doctor's clinic. You are the doctor, I am the patient. Speak ${profile?.target_language || "English"} throughout. If I struggle, help in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a doctor's clinic. You are the doctor, I am the patient. Speak ${profile?.target_language || "English"} throughout. If I struggle, help in ${profile?.native_language || "English"}.`
     },
     {
       id: "smalltalk", label: "Small Talk", icon: "💬",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are meeting for the first time at a social event. Have a natural casual conversation in ${profile?.target_language || "English"}. Correct my errors gently in ${profile?.native_language || "English"}.`
+      title: "Small Talk",
+      cefr: "A1",
+      tone: "casual",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are meeting for the first time at a social event. Have a natural casual conversation in ${profile?.target_language || "English"}. Correct my errors gently in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are meeting for the first time at a social event. Have a natural casual conversation in ${profile?.target_language || "English"}. Correct my errors gently in ${profile?.native_language || "English"}.`
     },
     {
       id: "taxi", label: "Taxi Ride", icon: "🚕",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. You are a taxi driver in a ${profile?.target_language || "English"}-speaking country, I just got in. Speak ${profile?.target_language || "English"} throughout. Correct my mistakes in ${profile?.native_language || "English"}.`
+      title: "Taxi Ride",
+      cefr: "A1",
+      tone: "casual",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. You are a taxi driver in a ${profile?.target_language || "English"}-speaking country, I just got in. Speak ${profile?.target_language || "English"} throughout. Correct my mistakes in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. You are a taxi driver in a ${profile?.target_language || "English"}-speaking country, I just got in. Speak ${profile?.target_language || "English"} throughout. Correct my mistakes in ${profile?.native_language || "English"}.`
     },
     {
       id: "phone", label: "Phone Call", icon: "📞",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are on a business phone call. You called me to discuss a project. Speak only ${profile?.target_language || "English"}. Give corrections in ${profile?.native_language || "English"}.`
+      title: "Business Phone Call",
+      cefr: "A2",
+      tone: "formal",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are on a business phone call. You called me to discuss a project. Speak only ${profile?.target_language || "English"}. Give corrections in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are on a business phone call. You called me to discuss a project. Speak only ${profile?.target_language || "English"}. Give corrections in ${profile?.native_language || "English"}.`
     },
     {
       id: "market", label: "Market", icon: "🥦",
-      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a fresh food market. You are a vendor selling vegetables and fruits. I am a customer. Use ${profile?.target_language || "English"} only. Help me with errors in ${profile?.native_language || "English"}.`
+      title: "Fresh Food Market",
+      cefr: "A1",
+      tone: "casual",
+      prompt: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a fresh food market. You are a vendor selling vegetables and fruits. I am a customer. Use ${profile?.target_language || "English"} only. Help me with errors in ${profile?.native_language || "English"}.`,
+      promptTemplate: `Conduct this entirely in ${profile?.target_language || "English"}. We are at a fresh food market. You are a vendor selling vegetables and fruits. I am a customer. Use ${profile?.target_language || "English"} only. Help me with errors in ${profile?.native_language || "English"}.`
     },
   ];
 
@@ -821,12 +915,15 @@ Reply with only valid JSON, no extra text.`
       let systemPrompt;
       try {
         if (currentSyllabus && !curriculumLoading) {
+          // Detect scenario from user message
+          const detectedScenario = detectScenarioFromMessage(msg);
           // Use curriculum‑injected prompt
           systemPrompt = buildCurriculumPrompt(
-            null, // scenario (none for general chat)
+            detectedScenario, // pass scenario object if detected, otherwise null
             profile,
             currentSyllabus,
-            memoryContext
+            memoryContext,
+            correctionLanguage
           );
         } else {
           // Fallback to generic prompt (compatible with invokeGeminiChat)
@@ -860,21 +957,41 @@ Reply with only valid JSON, no extra text.`
           currentLevel
         );
         // Continue with original flow
-        const parsed = parseAgentResponse(responseText);
-        console.log('Parsed message:', parsed);
+        const aiParsed = parseAIResponse(responseText);
+        console.log('AI parsed:', aiParsed);
 
-        const formattedResponse = parsed.word
-          ? `${parsed.reaction}\n\nWORD: ${parsed.word}\nMEANING: ${parsed.meaning}\n\n${parsed.prompt}`
-          : responseText;
+        // Store next question for context continuity
+        if (aiParsed.nextQuestion) {
+          setNextQuestion(aiParsed.nextQuestion);
+        }
 
-        const assistantMsg = { role: "assistant", content: formattedResponse, parsed };
+        // Display only reply in message list
+        const assistantMsg = {
+          role: "assistant",
+          content: aiParsed.reply,
+          parsed: aiParsed,
+          correction: aiParsed.correction
+        };
         const finalMessages = [...updatedMessages, assistantMsg];
         setMessages(finalMessages);
         setIsLoading(false);
         setSuggestedReplies(replySets[finalMessages.length % replySets.length]);
 
-        if (parsed.word && !wordsIntroduced.includes(parsed.word)) {
-          setWordsIntroduced(prev => [...prev, parsed.word]);
+        // If correction exists, show as toast (inline hint)
+        if (aiParsed.correction) {
+          console.log('Correction:', aiParsed.correction);
+          setPhonemeCorrection(aiParsed.correction);
+        }
+
+        // Legacy word introduction logic (if parsed.word exists)
+        if (aiParsed.parsed?.word && !wordsIntroduced.includes(aiParsed.parsed.word)) {
+          setWordsIntroduced(prev => [...prev, aiParsed.parsed.word]);
+        }
+
+        // If correction exists, show as toast (inline hint)
+        if (aiParsed.correction) {
+          console.log('Correction:', aiParsed.correction);
+          setPhonemeCorrection(aiParsed.correction);
         }
 
         await dbActions.createChatMessage({ ...assistantMsg, sessionId }).catch(e => console.error("Firestore ai msg error:", e));
@@ -915,21 +1032,34 @@ Reply with only valid JSON, no extra text.`
             throw new Error("Invalid response format from Groq API");
           }
 
-          const parsed = parseAgentResponse(responseText);
-          console.log('Parsed message:', parsed);
+          const aiParsed = parseAIResponse(responseText);
+          console.log('Parsed AI response:', aiParsed);
 
-          const formattedResponse = parsed.word
-            ? `${parsed.reaction}\n\nWORD: ${parsed.word}\nMEANING: ${parsed.meaning}\n\n${parsed.prompt}`
-            : responseText;
+          // Store nextQuestion for context continuity
+          if (aiParsed.nextQuestion) {
+            setNextQuestion(aiParsed.nextQuestion);
+          }
 
-          const assistantMsg = { role: "assistant", content: formattedResponse, parsed };
+          // Display only the reply in the message list
+          const assistantMsg = {
+            role: "assistant",
+            content: aiParsed.reply,
+            parsed: aiParsed
+          };
           const finalMessages = [...updatedMessages, assistantMsg];
           setMessages(finalMessages);
           setIsLoading(false);
           setSuggestedReplies(replySets[finalMessages.length % replySets.length]);
 
-          if (parsed.word && !wordsIntroduced.includes(parsed.word)) {
-            setWordsIntroduced(prev => [...prev, parsed.word]);
+          // Legacy word introduction logic (if parsed.word exists)
+          if (aiParsed.parsed?.word && !wordsIntroduced.includes(aiParsed.parsed.word)) {
+            setWordsIntroduced(prev => [...prev, aiParsed.parsed.word]);
+          }
+
+          // If correction exists, show as toast (inline hint)
+          if (aiParsed.correction) {
+            console.log('Correction:', aiParsed.correction);
+            setPhonemeCorrection(aiParsed.correction);
           }
 
           await dbActions.createChatMessage({ ...assistantMsg, sessionId }).catch(e => console.error("Firestore ai msg error:", e));
@@ -939,12 +1069,9 @@ Reply with only valid JSON, no extra text.`
             extractAndStoreMistake(userId, msg, responseText, profile.target_language);
           }
 
-          if (parsed.word) {
-            speak(parsed.word, true);
-          } else {
-            speak(responseText);
-          }
-          extractAndSaveWord(responseText, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
+          // Speak the reply (not the whole JSON)
+          speak(aiParsed.reply);
+          extractAndSaveWord(aiParsed.reply, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
 
           // Update user memory with topics from this conversation
           if (userId && profile?.target_language && profile?.native_language) {
@@ -977,21 +1104,28 @@ Reply with only valid JSON, no extra text.`
         currentLevel
       );
 
-      const parsed = parseAgentResponse(responseText);
-      console.log('Parsed message:', parsed);
+      const aiParsed = parseAIResponse(responseText);
+      console.log('Parsed AI response:', aiParsed);
 
-      const formattedResponse = parsed.word
-        ? `${parsed.reaction}\n\nWORD: ${parsed.word}\nMEANING: ${parsed.meaning}\n\n${parsed.prompt}`
-        : responseText;
+      // Store nextQuestion for context continuity
+      if (aiParsed.nextQuestion) {
+        setNextQuestion(aiParsed.nextQuestion);
+      }
 
-      const assistantMsg = { role: "assistant", content: formattedResponse, parsed };
+      // Display only the reply in the message list
+      const assistantMsg = {
+        role: "assistant",
+        content: aiParsed.reply,
+        parsed: aiParsed
+      };
       const finalMessages = [...updatedMessages, assistantMsg];
       setMessages(finalMessages);
       setIsLoading(false);
       setSuggestedReplies(replySets[finalMessages.length % replySets.length]);
 
-      if (parsed.word && !wordsIntroduced.includes(parsed.word)) {
-        setWordsIntroduced(prev => [...prev, parsed.word]);
+      // Legacy word introduction logic (if parsed.word exists)
+      if (aiParsed.parsed?.word && !wordsIntroduced.includes(aiParsed.parsed.word)) {
+        setWordsIntroduced(prev => [...prev, aiParsed.parsed.word]);
       }
 
       await dbActions.createChatMessage({ ...assistantMsg, sessionId }).catch(e => console.error("Firestore ai msg error:", e));
@@ -1001,12 +1135,9 @@ Reply with only valid JSON, no extra text.`
         extractAndStoreMistake(userId, msg, responseText, profile.target_language);
       }
 
-      if (parsed.word) {
-        speak(parsed.word, true);
-      } else {
-        speak(responseText);
-      }
-      extractAndSaveWord(responseText, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
+      // Speak the reply (not the whole JSON)
+      speak(aiParsed.reply);
+      extractAndSaveWord(aiParsed.reply, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
 
       // Update user memory with topics from this conversation
       if (userId && profile?.target_language && profile?.native_language) {
@@ -1162,6 +1293,14 @@ Reply with only valid JSON, no extra text.`
             {PERSONALITIES.find(p => p.id === tutorPersonality)?.emoji}
             {PERSONALITIES.find(p => p.id === tutorPersonality)?.name}
           </button>
+          <select
+            value={correctionLanguage}
+            onChange={(e) => setCorrectionLanguage(e.target.value)}
+            className="text-xs text-muted-foreground hover:text-primary bg-transparent border-none focus:outline-none"
+          >
+            <option value="en">English</option>
+            <option value="target">{profile?.target_language || 'Target Language'}</option>
+          </select>
           <button
             onClick={() => setShowSummary(true)}
             className="text-xs text-muted-foreground hover:text-primary transition-colors"
@@ -1193,6 +1332,20 @@ Reply with only valid JSON, no extra text.`
       {streakToast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-orange-500 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
           🔥 {streakToast} day streak! Keep it going!
+        </div>
+      )}
+
+      {/* Pronunciation feedback toast */}
+      {showToast && (
+        <div className="fixed bottom-4 right-4 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-lg animate-slide-up-bounce max-w-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🗣️</span>
+            <div>
+              <div className="font-semibold text-sm">Pronunciation tip: {phonemeName}</div>
+              <div className="text-xs opacity-90 mt-1">{tip}</div>
+            </div>
+          </div>
+          <button onClick={() => dismiss()} className="absolute top-2 right-2 text-white/70 hover:text-white">×</button>
         </div>
       )}
 

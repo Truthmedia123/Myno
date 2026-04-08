@@ -100,7 +100,7 @@ Now begin the conversation.`;
  * @param {string} memoryContext - Memory context string from generateMemoryContext()
  * @returns {string} Complete prompt for Groq API
  */
-export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '') {
+export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '', correctionLanguage = 'en') {
     // Default profile if missing
     const profile = userProfile || {
         cefrLevel: 'A1',
@@ -132,9 +132,10 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
     const grammarFocus = syllabus.grammarDetails?.[0] || syllabus.grammar?.[0] || 'basic sentence structure';
     const grammarTip = syllabus.grammarDetails?.[0]?.tip || 'Focus on correct word order and verb conjugation.';
 
-    // Get up to 3 target vocabulary words
-    const targetVocab = (syllabus.vocab || []).slice(0, 3).map(item => item.word).join(', ');
-    const vocabText = targetVocab ? `Incorporate these vocabulary words naturally: ${targetVocab}.` : '';
+    // Get all vocabulary words from syllabus for enforcement
+    const allVocabWords = (syllabus.vocab || []).map(item => item.word);
+    const targetVocab = allVocabWords.slice(0, 3).join(', ');
+    const vocabText = targetVocab ? `USE ONLY these vocabulary words from current syllabus: ${allVocabWords.join(', ')}. If absolutely necessary, use other ${cefrLevel}-level words.` : '';
 
     // Get phoneme targets from syllabus or user profile
     const syllabusPhonemes = syllabus.phonemes || [];
@@ -177,8 +178,9 @@ RULES:
 1. Use ${cefrLevel}-level language.
 2. Max 1 correction/turn. Focus on curriculum errors.
 3. Replies: ≤3 sentences, end with question.
-4. Naturally use target vocabulary.
+4. Use only syllabus vocabulary words (listed above). If user asks for a word not in syllabus, provide it briefly then return to syllabus vocab.
 5. Reinforce target phonemes gently.
+6. When providing corrections, use ${correctionLanguage === 'en' ? 'English' : target_language} for explanations.
 
 ${fullMemoryContext}
 
