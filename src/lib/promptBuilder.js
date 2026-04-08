@@ -182,6 +182,13 @@ RULES:
 5. Reinforce target phonemes gently.
 6. When providing corrections, use ${correctionLanguage === 'en' ? 'English' : target_language} for explanations.
 
+A1 COMPLEXITY CEILING:
+• MAX 5 words per sentence. ONLY present tense verbs. NO subordinate clauses (que/si/porque). End with ≤3-word question.
+• Examples:
+  VALID: "¡Hola! 🍴 ¿Agua?" | "Sí. Gracias. ¿Pan?"
+  INVALID: "Me alegra que hayas dicho..." | "¿Quieres la cuenta, por favor?"
+• Keep total reply under 10 words. Use emoji replacements for non‑A1 vocabulary: 🍴(food/drink), 🏠(location/home), 🚶(movement), 📦(objects).
+
 ${fullMemoryContext}
 
 OUTPUT JSON:

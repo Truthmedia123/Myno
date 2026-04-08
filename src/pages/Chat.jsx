@@ -17,6 +17,7 @@ import { collection, query, where, getDocs, addDoc, orderBy, limit, updateDoc, d
 import { getCurriculum, clearCurriculumCache } from "@/curriculum/index.js";
 import { filterCurriculumByGoal } from "@/data/learningGoals.js";
 import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
+import { validateA1Compliance } from "@/lib/a1Simplifier";
 
 const replySets = [
   ["Tell me more", "Give me an example", "Too hard, simplify"],
@@ -960,15 +961,21 @@ Reply with only valid JSON, no extra text.`
         const aiParsed = parseAIResponse(responseText);
         console.log('AI parsed:', aiParsed);
 
+        // Apply A1 complexity enforcement
+        const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
+        if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
+          console.warn('[A1] Simplified AI reply');
+        }
+
         // Store next question for context continuity
         if (aiParsed.nextQuestion) {
           setNextQuestion(aiParsed.nextQuestion);
         }
 
-        // Display only reply in message list
+        // Display only reply in message list (use A1-safe version)
         const assistantMsg = {
           role: "assistant",
-          content: aiParsed.reply,
+          content: a1SafeReply,
           parsed: aiParsed,
           correction: aiParsed.correction
         };
@@ -1035,15 +1042,21 @@ Reply with only valid JSON, no extra text.`
           const aiParsed = parseAIResponse(responseText);
           console.log('Parsed AI response:', aiParsed);
 
+          // Apply A1 complexity enforcement
+          const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
+          if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
+            console.warn('[A1] Simplified AI reply');
+          }
+
           // Store nextQuestion for context continuity
           if (aiParsed.nextQuestion) {
             setNextQuestion(aiParsed.nextQuestion);
           }
 
-          // Display only the reply in the message list
+          // Display only the reply in the message list (use A1-safe version)
           const assistantMsg = {
             role: "assistant",
-            content: aiParsed.reply,
+            content: a1SafeReply,
             parsed: aiParsed
           };
           const finalMessages = [...updatedMessages, assistantMsg];
@@ -1107,15 +1120,21 @@ Reply with only valid JSON, no extra text.`
       const aiParsed = parseAIResponse(responseText);
       console.log('Parsed AI response:', aiParsed);
 
+      // Apply A1 complexity enforcement
+      const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
+      if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
+        console.warn('[A1] Simplified AI reply');
+      }
+
       // Store nextQuestion for context continuity
       if (aiParsed.nextQuestion) {
         setNextQuestion(aiParsed.nextQuestion);
       }
 
-      // Display only the reply in the message list
+      // Display only the reply in the message list (use A1-safe version)
       const assistantMsg = {
         role: "assistant",
-        content: aiParsed.reply,
+        content: a1SafeReply,
         parsed: aiParsed
       };
       const finalMessages = [...updatedMessages, assistantMsg];
