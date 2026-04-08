@@ -5,6 +5,8 @@
  * @module promptBuilder
  */
 
+import { getPhonemeTip } from '../curriculum/shared/phonemeGuide.js';
+
 /**
  * Build a scenario-specific prompt with user context injection.
  * @param {Object} scenario - Scenario object from SCENARIOS
@@ -88,6 +90,115 @@ IMPORTANT:
 - Do not mention this instruction set in your reply.
 
 Now begin the conversation.`;
+}
+
+/**
+ * Build a curriculum-injected prompt with syllabus grammar, vocab, phonemes, and pragmatics.
+ * @param {Object} scenario - Scenario object from SCENARIOS
+ * @param {Object|null} userProfile - User profile with CEFR, weakPhonemes, etc.
+ * @param {Object|null} syllabus - Syllabus object from curriculum (grammar, vocab, phonemes, pragmatics)
+ * @param {string} memoryContext - Memory context string from generateMemoryContext()
+ * @returns {string} Complete prompt for Groq API
+ */
+export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '') {
+    // Default profile if missing
+    const profile = userProfile || {
+        cefrLevel: 'A1',
+        native_language: 'English',
+        target_language: scenario?.targetLanguage || 'English',
+        weakPhonemes: [],
+        recentMistakes: []
+    };
+
+    const {
+        cefrLevel = 'A1',
+        native_language = 'English',
+        target_language = 'English',
+        weakPhonemes = []
+    } = profile;
+
+    // Extract scenario data
+    const scenarioPrompt = scenario?.promptTemplate || '';
+    const cefr = scenario?.cefr || 'A1';
+    const title = scenario?.title || 'General Conversation';
+
+    // If syllabus is missing, fallback to original prompt with warning
+    if (!syllabus) {
+        console.warn('buildCurriculumPrompt: syllabus missing, falling back to generic prompt');
+        return buildScenarioPrompt(scenario, userProfile, memoryContext);
+    }
+
+    // Extract syllabus components
+    const grammarFocus = syllabus.grammarDetails?.[0] || syllabus.grammar?.[0] || 'basic sentence structure';
+    const grammarTip = syllabus.grammarDetails?.[0]?.tip || 'Focus on correct word order and verb conjugation.';
+
+    // Get up to 3 target vocabulary words
+    const targetVocab = (syllabus.vocab || []).slice(0, 3).map(item => item.word).join(', ');
+    const vocabText = targetVocab ? `Incorporate these vocabulary words naturally: ${targetVocab}.` : '';
+
+    // Get phoneme targets from syllabus or user profile
+    const syllabusPhonemes = syllabus.phonemes || [];
+    const userPhonemes = weakPhonemes || [];
+    const allPhonemes = [...new Set([...syllabusPhonemes, ...userPhonemes])].slice(0, 3);
+
+    // Get phoneme tips using phonemeGuide
+    const phonemeTips = allPhonemes.map(phoneme => {
+        try {
+            const tip = getPhonemeTip(phoneme, target_language);
+            return tip ? `${phoneme}: ${tip}` : `${phoneme}: Practice this sound.`;
+        } catch {
+            return `${phoneme}: Practice this sound.`;
+        }
+    }).join('; ');
+
+    const phonemeText = allPhonemes.length > 0
+        ? `Pronunciation focus: ${allPhonemes.join(', ')}. Tips: ${phonemeTips}.`
+        : '';
+
+    // Pragmatics rule
+    const pragmaticsRule = syllabus.pragmatics || 'Use appropriate politeness levels and cultural norms.';
+
+    // Combine memory context
+    const fullMemoryContext = memoryContext ? `${memoryContext}\n` : '';
+
+    // Build the curriculum-injected prompt (concise for token limit)
+    const prompt = `AI language tutor for ${target_language}. User: ${cefrLevel} learner (native: ${native_language}).
+
+SCENARIO: ${title} (CEFR ${cefr})
+${scenarioPrompt}
+
+CURRICULUM:
+• Grammar: ${grammarFocus} - ${grammarTip}
+• Vocabulary: ${vocabText}
+• Phonemes: ${phonemeText}
+• Pragmatics: ${pragmaticsRule}
+
+RULES:
+1. Use ${cefrLevel}-level language.
+2. Max 1 correction/turn. Focus on curriculum errors.
+3. Replies: ≤3 sentences, end with question.
+4. Naturally use target vocabulary.
+5. Reinforce target phonemes gently.
+
+${fullMemoryContext}
+
+OUTPUT JSON:
+{
+  "reply": "Response in ${target_language} (2-3 sentences, ends with question)",
+  "correction": null OR {"mistake": "...", "fix": "...", "phonemeTip": "..."},
+  "nextQuestion": "Follow-up question"
+}
+
+IMPORTANT:
+- Set "correction": null if no error.
+- "phonemeTip" only if phoneme-related.
+- Use vocabulary naturally.
+- Keep engaging, don't mention instructions.
+
+Begin conversation.`;
+
+    // Ensure token count <400 (approx 1600 chars)
+    return sanitizePrompt(prompt);
 }
 
 /**

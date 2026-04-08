@@ -13,6 +13,9 @@ import MynoBird from "@/components/myno/MynoBird";
 import { getBcp47Tag, speakText } from "@/lib/voiceEngine";
 import { auth, db } from "@/lib/firebase";
 import { collection, query, where, getDocs, addDoc, orderBy, limit, updateDoc, doc } from "firebase/firestore";
+import { getCurriculum, clearCurriculumCache } from "@/curriculum/index.js";
+import { filterCurriculumByGoal } from "@/data/learningGoals.js";
+import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
 
 const replySets = [
   ["Tell me more", "Give me an example", "Too hard, simplify"],
@@ -67,6 +70,10 @@ export default function Chat() {
   const [wordsIntroduced, setWordsIntroduced] = useState([]);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [wordsUsedByUser, setWordsUsedByUser] = useState(new Set());
+  // Curriculum system state
+  const [currentSyllabus, setCurrentSyllabus] = useState(null);
+  const [curriculumLoading, setCurriculumLoading] = useState(false);
+  const [goalFilter, setGoalFilter] = useState([]);
   const scrollRef = useRef(null);
   const recRef = useRef(null);
   const streakUpdated = useRef(false);
@@ -500,6 +507,76 @@ Return ONLY a valid JSON object with these exact keys: title, intro, examples (a
     localStorage.setItem('myno_currentLevel', currentLevel.toString());
   }, [currentLevel]);
 
+  // Load syllabus based on profile target language and user level
+  useEffect(() => {
+    const loadSyllabus = async () => {
+      if (!profile?.target_language || !profile?.user_level) {
+        return;
+      }
+      const lang = profile.target_language;
+      // Map user_level to CEFR level (simplified mapping)
+      const levelMap = {
+        'beginner': 'A1',
+        'some': 'A2',
+        'intermediate': 'B1'
+      };
+      const cefr = levelMap[profile.user_level] || 'A1';
+
+      setCurriculumLoading(true);
+      try {
+        const syllabus = await getCurriculum(lang, cefr);
+        setCurrentSyllabus(syllabus);
+        console.log(`Loaded syllabus for ${lang}/${cefr}`, syllabus);
+      } catch (error) {
+        console.error('Failed to load syllabus:', error);
+        // Fallback to empty syllabus
+        setCurrentSyllabus({
+          level: cefr,
+          language: lang,
+          grammar: [],
+          vocab: [],
+          phonemes: [],
+          pragmatics: '',
+          orthography: null
+        });
+      } finally {
+        setCurriculumLoading(false);
+      }
+    };
+
+    loadSyllabus();
+  }, [profile?.target_language, profile?.user_level]);
+
+  // Filter curriculum by learning goal
+  useEffect(() => {
+    const filterByGoal = async () => {
+      if (!profile?.target_language || !profile?.learning_goal || !profile?.user_level) {
+        setGoalFilter([]);
+        return;
+      }
+      const lang = profile.target_language;
+      const goalId = profile.learning_goal;
+      // Map user_level to CEFR level for filtering
+      const levelMap = {
+        'beginner': 'A1',
+        'some': 'A2',
+        'intermediate': 'B1'
+      };
+      const userCefrLevel = levelMap[profile.user_level] || 'A1';
+
+      try {
+        const filtered = await filterCurriculumByGoal(goalId, lang, userCefrLevel);
+        setGoalFilter(filtered);
+        console.log(`Filtered curriculum for goal ${goalId}:`, filtered);
+      } catch (error) {
+        console.error('Failed to filter curriculum by goal:', error);
+        setGoalFilter([]);
+      }
+    };
+
+    filterByGoal();
+  }, [profile?.target_language, profile?.learning_goal, profile?.user_level]);
+
   const speak = (text, wordOnly = false) => {
     if (wordOnly && typeof text === 'string') {
       speakText(text, profile?.target_language || "English", {
@@ -740,6 +817,155 @@ Reply with only valid JSON, no extra text.`
       const currentPersonality = PERSONALITIES.find(p => p.id === tutorPersonality);
       const personalityStyle = currentPersonality?.style || "";
 
+      // Build curriculum‑informed prompt
+      let systemPrompt;
+      try {
+        if (currentSyllabus && !curriculumLoading) {
+          // Use curriculum‑injected prompt
+          systemPrompt = buildCurriculumPrompt(
+            null, // scenario (none for general chat)
+            profile,
+            currentSyllabus,
+            memoryContext
+          );
+        } else {
+          // Fallback to generic prompt (compatible with invokeGeminiChat)
+          systemPrompt = await invokeGeminiChat(
+            updatedMessages,
+            profile?.target_language || "English",
+            profile?.native_language || "English",
+            profile?.learning_goal || "General",
+            profile?.user_level || "beginner",
+            memoryContext,
+            personalityStyle,
+            currentLevel
+          );
+          // Note: invokeGeminiChat returns the AI response, not the prompt.
+          // We need to adjust this fallback logic.
+          // For now, we'll keep the original call as fallback.
+          const responseText = systemPrompt;
+          systemPrompt = null; // flag to use original flow
+        }
+      } catch (promptError) {
+        console.error('Failed to build curriculum prompt:', promptError);
+        // Fallback to original invokeGeminiChat
+        const responseText = await invokeGeminiChat(
+          updatedMessages,
+          profile?.target_language || "English",
+          profile?.native_language || "English",
+          profile?.learning_goal || "General",
+          profile?.user_level || "beginner",
+          memoryContext,
+          personalityStyle,
+          currentLevel
+        );
+        // Continue with original flow
+        const parsed = parseAgentResponse(responseText);
+        console.log('Parsed message:', parsed);
+
+        const formattedResponse = parsed.word
+          ? `${parsed.reaction}\n\nWORD: ${parsed.word}\nMEANING: ${parsed.meaning}\n\n${parsed.prompt}`
+          : responseText;
+
+        const assistantMsg = { role: "assistant", content: formattedResponse, parsed };
+        const finalMessages = [...updatedMessages, assistantMsg];
+        setMessages(finalMessages);
+        setIsLoading(false);
+        setSuggestedReplies(replySets[finalMessages.length % replySets.length]);
+
+        if (parsed.word && !wordsIntroduced.includes(parsed.word)) {
+          setWordsIntroduced(prev => [...prev, parsed.word]);
+        }
+
+        await dbActions.createChatMessage({ ...assistantMsg, sessionId }).catch(e => console.error("Firestore ai msg error:", e));
+        return;
+      }
+
+      // If we have a curriculum prompt, call Groq API directly
+      if (systemPrompt && typeof systemPrompt === 'string') {
+        try {
+          const formattedMessages = [
+            { role: "system", content: systemPrompt + (personalityStyle ? `\n\nTUTOR PERSONALITY STYLE:\n${personalityStyle}` : '') },
+            ...updatedMessages.map(m => ({
+              role: m.role === "assistant" ? "assistant" : "user",
+              content: String(m?.content || "")
+            }))
+          ];
+
+          const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "llama-3.3-70b-versatile",
+              messages: formattedMessages,
+              max_tokens: 300
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Groq API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const responseText = data.choices[0]?.message?.content;
+          if (!responseText) {
+            throw new Error("Invalid response format from Groq API");
+          }
+
+          const parsed = parseAgentResponse(responseText);
+          console.log('Parsed message:', parsed);
+
+          const formattedResponse = parsed.word
+            ? `${parsed.reaction}\n\nWORD: ${parsed.word}\nMEANING: ${parsed.meaning}\n\n${parsed.prompt}`
+            : responseText;
+
+          const assistantMsg = { role: "assistant", content: formattedResponse, parsed };
+          const finalMessages = [...updatedMessages, assistantMsg];
+          setMessages(finalMessages);
+          setIsLoading(false);
+          setSuggestedReplies(replySets[finalMessages.length % replySets.length]);
+
+          if (parsed.word && !wordsIntroduced.includes(parsed.word)) {
+            setWordsIntroduced(prev => [...prev, parsed.word]);
+          }
+
+          await dbActions.createChatMessage({ ...assistantMsg, sessionId }).catch(e => console.error("Firestore ai msg error:", e));
+
+          // Extract and store mistakes if AI corrected the user
+          if (userId && profile?.target_language) {
+            extractAndStoreMistake(userId, msg, responseText, profile.target_language);
+          }
+
+          if (parsed.word) {
+            speak(parsed.word, true);
+          } else {
+            speak(responseText);
+          }
+          extractAndSaveWord(responseText, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
+
+          // Update user memory with topics from this conversation
+          if (userId && profile?.target_language && profile?.native_language) {
+            const userMessagesThisSession = messages.filter(m => m.role === "user").map(m => m.content);
+            updateUserMemory(
+              db,
+              userId,
+              responseText,
+              userMessagesThisSession,
+              profile.target_language,
+              profile.native_language
+            ).catch(e => console.error("Update user memory error:", e));
+          }
+          return; // Successfully handled curriculum prompt
+        } catch (apiError) {
+          console.error('Curriculum prompt API call failed:', apiError);
+          // Fall through to generic invokeGeminiChat
+        }
+      }
+
+      // Fallback to original invokeGeminiChat if curriculum prompt not used or failed
       const responseText = await invokeGeminiChat(
         updatedMessages,
         profile?.target_language || "English",

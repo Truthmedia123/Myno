@@ -1,7 +1,15 @@
 /**
  * Learning goal definitions for Myno AI Tutor.
- * Each goal filters scenarios and adapts curriculum focus.
+ * Each goal filters curriculum syllabi and adapts learning focus.
  * @module learningGoals
+ */
+
+/**
+ * @typedef {Object} CurriculumFocus
+ * @property {string[]} grammar - Grammar point IDs to prioritize
+ * @property {string[]} vocabThemes - Theme tags: 'travel', 'food', etc.
+ * @property {string[]} phonemes - Phoneme keys to emphasize
+ * @property {string[]} cefrLevels - CEFR levels to target, e.g., ['A1','A2']
  */
 
 /**
@@ -10,7 +18,7 @@
  * @property {string} label - Display name
  * @property {string} icon - Emoji or SVG representation
  * @property {string} description - Brief explanation
- * @property {string[]} scenarioIds - Array of scenario IDs from scenarios.js
+ * @property {CurriculumFocus} curriculumFocus - Content focus for this goal
  * @property {[string, string]} cefrRange - Minimum and maximum CEFR levels ['A1','B1']
  */
 
@@ -21,7 +29,12 @@ export const LEARNING_GOALS = [
         label: 'Travel & Tourism',
         icon: '✈️',
         description: 'Master essential phrases for hotels, restaurants, transportation, and sightseeing.',
-        scenarioIds: ['airport_checkin', 'hotel_checkin', 'restaurant_ordering', 'asking_directions', 'shopping_market'],
+        curriculumFocus: {
+            grammar: ['present_tense', 'imperative', 'questions'],
+            vocabThemes: ['travel', 'food', 'transportation', 'directions', 'shopping'],
+            phonemes: ['p', 't', 'k', 'r', 'l'],
+            cefrLevels: ['A1', 'A2']
+        },
         cefrRange: ['A1', 'B1']
     },
     {
@@ -29,7 +42,12 @@ export const LEARNING_GOALS = [
         label: 'Business & Work',
         icon: '💼',
         description: 'Learn professional communication, meetings, emails, and workplace vocabulary.',
-        scenarioIds: ['business_introduction', 'meeting_discussion', 'email_composition', 'presentation_practice', 'networking_event'],
+        curriculumFocus: {
+            grammar: ['formal_present', 'past_tense', 'modals', 'conditionals'],
+            vocabThemes: ['business', 'meetings', 'email', 'presentation', 'networking'],
+            phonemes: ['s', 'z', 'ʃ', 'tʃ'],
+            cefrLevels: ['A2', 'B2']
+        },
         cefrRange: ['A2', 'B2']
     },
     {
@@ -37,7 +55,12 @@ export const LEARNING_GOALS = [
         label: 'Exam Preparation',
         icon: '📚',
         description: 'Focus on grammar accuracy, academic vocabulary, and test‑taking strategies.',
-        scenarioIds: ['grammar_drill', 'vocabulary_quiz', 'listening_comprehension', 'writing_practice', 'speaking_interview'],
+        curriculumFocus: {
+            grammar: ['all_tenses', 'passive_voice', 'relative_clauses', 'subjunctive'],
+            vocabThemes: ['academic', 'formal_writing', 'test_phrases', 'analysis'],
+            phonemes: ['θ', 'ð', 'ŋ', 'ʒ'],
+            cefrLevels: ['A2', 'C1']
+        },
         cefrRange: ['A2', 'C1']
     },
     {
@@ -45,7 +68,12 @@ export const LEARNING_GOALS = [
         label: 'Casual Conversation',
         icon: '😊',
         description: 'Build confidence in everyday chats, hobbies, friendships, and social situations.',
-        scenarioIds: ['meeting_new_people', 'discussing_hobbies', 'daily_routine', 'making_plans', 'sharing_stories'],
+        curriculumFocus: {
+            grammar: ['present_continuous', 'simple_past', 'future_intent', 'slang'],
+            vocabThemes: ['social', 'hobbies', 'daily_routine', 'feelings', 'plans'],
+            phonemes: ['m', 'n', 'h', 'w', 'j'],
+            cefrLevels: ['A1', 'B1']
+        },
         cefrRange: ['A1', 'B1']
     }
 ];
@@ -73,43 +101,146 @@ export function getGoalOptions() {
 }
 
 /**
- * Check if a scenario is relevant to a learning goal.
- * @param {string} scenarioId - Scenario ID from scenarios.js
- * @param {string} goalId - Learning goal ID
- * @returns {boolean} True if scenario belongs to goal
+ * Check if a syllabus is relevant to a learning goal.
+ * @param {Object} syllabus - Syllabus object from curriculum
+ * @param {LearningGoal} goal - Learning goal
+ * @returns {boolean} True if syllabus matches goal's curriculum focus
  */
-export function isScenarioInGoal(scenarioId, goalId) {
-    const goal = getGoalById(goalId);
-    if (!goal) return false;
-    return goal.scenarioIds.includes(scenarioId);
+export function isSyllabusRelevant(syllabus, goal) {
+    const focus = goal.curriculumFocus;
+    // Check grammar overlap
+    const grammarMatch = focus.grammar.some(g => syllabus.grammar?.includes(g));
+    // Check vocab theme overlap
+    const vocabMatch = focus.vocabThemes.some(v => syllabus.vocabThemes?.includes(v));
+    // Check phoneme overlap
+    const phonemeMatch = focus.phonemes.some(p => syllabus.phonemes?.includes(p));
+    // Check CEFR level within range
+    const cefrMatch = focus.cefrLevels.includes(syllabus.cefr);
+    // At least one content match and CEFR match
+    return (grammarMatch || vocabMatch || phonemeMatch) && cefrMatch;
 }
 
 /**
- * Filter scenarios by learning goal and CEFR level.
+ * Load a syllabus via dynamic import from curriculum/{lang}/{cefr}.js
+ * @param {string} lang - Language code (e.g., 'es', 'fr')
+ * @param {string} cefr - CEFR level (e.g., 'A1', 'A2')
+ * @returns {Promise<Object>} Syllabus object
+ */
+async function getCurriculum(lang, cefr) {
+    const cacheKey = `curriculum_${lang}_${cefr}`;
+    // Check localStorage cache
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        try {
+            return JSON.parse(cached);
+        } catch (e) {
+            // Invalid cache, continue to import
+        }
+    }
+    try {
+        // Try relative path from src/data to curriculum at project root (two levels up)
+        const module = await import(`../../curriculum/${lang}/${cefr}.js`);
+        const syllabus = module.default || module;
+        // Cache in localStorage (limited to 1 day)
+        localStorage.setItem(cacheKey, JSON.stringify(syllabus));
+        localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
+        return syllabus;
+    } catch (firstError) {
+        try {
+            // Fallback: curriculum inside src (one level up)
+            const module = await import(`../curriculum/${lang}/${cefr}.js`);
+            const syllabus = module.default || module;
+            localStorage.setItem(cacheKey, JSON.stringify(syllabus));
+            localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
+            return syllabus;
+        } catch (secondError) {
+            console.warn(`Failed to load curriculum for ${lang}/${cefr}:`, secondError);
+            // Return a fallback empty syllabus
+            return {
+                grammar: [],
+                vocabThemes: [],
+                phonemes: [],
+                cefr
+            };
+        }
+    }
+}
+
+/**
+ * Filter curriculum syllabi by learning goal and user CEFR level.
+ * @param {string} goalId - Learning goal ID
+ * @param {string} lang - Target language code
+ * @param {string} userCefrLevel - User's CEFR level (e.g., 'A2')
+ * @returns {Promise<Array<{lang: string, cefr: string, syllabus: Object}>>} Matching syllabi
+ */
+export async function filterCurriculumByGoal(goalId, lang, userCefrLevel) {
+    const goal = getGoalById(goalId);
+    if (!goal) return [];
+    const { cefrLevels } = goal.curriculumFocus;
+    // Determine which CEFR levels to load (those within goal's cefrLevels and not exceeding user level)
+    const cefrOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const userLevelIndex = cefrOrder.indexOf(userCefrLevel);
+    const levelsToLoad = cefrLevels.filter(level => {
+        const levelIndex = cefrOrder.indexOf(level);
+        return levelIndex <= userLevelIndex;
+    });
+    if (levelsToLoad.length === 0) {
+        console.warn(`No suitable CEFR levels for goal ${goalId} and user level ${userCefrLevel}`);
+        return [];
+    }
+    const results = [];
+    for (const cefr of levelsToLoad) {
+        try {
+            const syllabus = await getCurriculum(lang, cefr);
+            if (isSyllabusRelevant(syllabus, goal)) {
+                results.push({ lang, cefr, syllabus });
+            }
+        } catch (error) {
+            console.warn(`Skipping ${lang}/${cefr} due to error:`, error);
+        }
+    }
+    return results;
+}
+
+/**
+ * Get the most relevant syllabus for a goal.
+ * @param {string} goalId - Learning goal ID
+ * @param {string} lang - Target language code
+ * @param {string} userCefrLevel - User's CEFR level
+ * @returns {Promise<Object|null>} Most relevant syllabus object, or null if none
+ */
+export async function getCurriculumForGoal(goalId, lang, userCefrLevel) {
+    const matches = await filterCurriculumByGoal(goalId, lang, userCefrLevel);
+    if (matches.length === 0) return null;
+    // Prefer syllabus with highest CEFR level that matches user level
+    const cefrOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    matches.sort((a, b) => cefrOrder.indexOf(b.cefr) - cefrOrder.indexOf(a.cefr));
+    return matches[0].syllabus;
+}
+
+/**
+ * Deprecated: Check if a scenario is relevant to a learning goal.
+ * @deprecated Scenarios are replaced by curriculum syllabi
+ * @param {string} scenarioId - Scenario ID
+ * @param {string} goalId - Learning goal ID
+ * @returns {boolean} Always false
+ */
+export function isScenarioInGoal(scenarioId, goalId) {
+    console.warn('isScenarioInGoal is deprecated; curriculum system does not use scenarios');
+    return false;
+}
+
+/**
+ * Deprecated: Filter scenarios by learning goal and CEFR level.
+ * @deprecated Use filterCurriculumByGoal instead
  * @param {Array} allScenarios - Complete scenarios array
  * @param {string} goalId - Learning goal ID
  * @param {string} userCefrLevel - User's CEFR level (e.g., 'A2')
- * @returns {Array} Filtered scenarios
+ * @returns {Array} Filtered scenarios (empty array)
  */
 export function filterScenariosByGoal(allScenarios, goalId, userCefrLevel) {
-    const goal = getGoalById(goalId);
-    if (!goal) return allScenarios;
-
-    const [minCefr, maxCefr] = goal.cefrRange;
-    const cefrOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-    const userLevelIndex = cefrOrder.indexOf(userCefrLevel);
-    const minIndex = cefrOrder.indexOf(minCefr);
-    const maxIndex = cefrOrder.indexOf(maxCefr);
-
-    return allScenarios.filter(scenario => {
-        // Check if scenario is in goal's scenarioIds
-        const inGoal = goal.scenarioIds.includes(scenario.id);
-        if (!inGoal) return false;
-
-        // Check CEFR compatibility
-        const scenarioCefrIndex = cefrOrder.indexOf(scenario.cefr || 'A1');
-        return scenarioCefrIndex >= minIndex && scenarioCefrIndex <= maxIndex && scenarioCefrIndex <= userLevelIndex;
-    });
+    console.warn('filterScenariosByGoal is deprecated; use filterCurriculumByGoal');
+    return [];
 }
 
 /**
