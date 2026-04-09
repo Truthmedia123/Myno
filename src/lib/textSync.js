@@ -11,12 +11,18 @@
  * @returns {string} Cleaned text suitable for TTS
  */
 export function stripEmojis(text) {
-    if (!text || typeof text !== 'string') return '';
-    // Remove emojis and pictographs (Unicode ranges)
-    return text.replace(
-        /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
-        ''
-    ).replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    // Remove emojis using Unicode property escapes (covers all modern emojis)
+    let clean = text.replace(/(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu, '');
+    // Remove variation selectors (FE0F) and zero-width joiners (200D)
+    clean = clean.replace(/[\uFE0F\u200D]/g, '');
+    // Remove skin tone modifiers (1F3FB-1F3FF)
+    clean = clean.replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '');
+    // Clean up multiple spaces left behind
+    clean = clean.replace(/\s+/g, ' ');
+    // Remove spaces before common punctuation
+    clean = clean.replace(/\s+([.,!?;:])/g, '$1');
+    return clean.trim();
 }
 
 /**

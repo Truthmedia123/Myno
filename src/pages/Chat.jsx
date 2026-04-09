@@ -1303,74 +1303,106 @@ Reply with only valid JSON, no extra text.`
 
   return (
     <div className="flex flex-col h-screen bg-background max-w-md mx-auto">
-      {/* Header */}
-      <div className="glass flex items-center gap-3 px-4 py-3 border-b">
-        <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+      {/* Simplified Header with dropdown menu */}
+      <div className="glass flex items-center gap-3 px-4 py-3 border-b border-border/50">
+        <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 hover:bg-muted/80 transition-colors">
           <ArrowLeftIcon className="w-4 h-4" />
         </Link>
         <div className="flex items-center gap-2.5 flex-1">
           <MynoBird size="sm" speaking={isSpeaking} />
-          <div>
-            <p className="text-sm font-extrabold text-foreground leading-none">Myno Coach</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {isListening ? "🎙 Listening..." : isSpeaking ? "🔊 Speaking..." : `Teaching ${profile?.target_language || "English"} • Level ${currentLevel} — ${LEVEL_NAMES[currentLevel]}`}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-extrabold text-foreground leading-none truncate">Myno Coach</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+              {isListening ? "🎙 Listening..." : isSpeaking ? "🔊 Speaking..." : `${profile?.target_language || "English"} • Level ${currentLevel}`}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {!dailyLessonCompleted && !showDailyLesson && (
-            <button
-              onClick={() => setShowDailyLesson(true)}
-              className="text-xs bg-primary/20 text-primary hover:bg-primary/30 px-2 py-1 rounded-lg transition-colors"
-            >
-              Start Lesson
-            </button>
-          )}
-          {profile?.is_pro && (
-            <button
-              onClick={() => setShowLessonInput(true)}
-              className="text-xs text-primary font-medium hover:underline"
-            >
-              ✨ Custom Lesson
-            </button>
-          )}
-          <button
-            onClick={() => {
-              const drills = getDrills(profile?.target_language, profile?.user_level);
-              setCurrentDrill(drills);
-              setDrillIndex(0);
-              setDrillResults([]);
-              setDrillMode(true);
-            }}
-            className="text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            🎯 Drills
-          </button>
+
+        {/* Progress bar under header */}
+        <div className="absolute top-12 left-0 right-0 px-4">
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${Math.min(100, (currentLevel / 6) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Simplified dropdown menu */}
+        <div className="relative">
           <button
             onClick={() => setShowPersonalityPicker(true)}
-            className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+            className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+            title="Menu"
           >
-            {PERSONALITIES.find(p => p.id === tutorPersonality)?.emoji}
-            {PERSONALITIES.find(p => p.id === tutorPersonality)?.name}
+            <span className="text-sm">⚙️</span>
           </button>
-          <select
-            value={correctionLanguage}
-            onChange={(e) => setCorrectionLanguage(e.target.value)}
-            className="text-xs text-muted-foreground hover:text-primary bg-transparent border-none focus:outline-none"
-          >
-            <option value="en">English</option>
-            <option value="target">{profile?.target_language || 'Target Language'}</option>
-          </select>
-          <button
-            onClick={() => setShowSummary(true)}
-            className="text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            End Session
-          </button>
-          {sessionMinutes > 0 && (
-            <span className="text-xs text-muted-foreground">{sessionMinutes}m</span>
+
+          {/* Dropdown menu (shown when showPersonalityPicker is true) */}
+          {showPersonalityPicker && (
+            <div className="absolute right-0 top-10 w-48 bg-card border border-border rounded-xl shadow-lg z-50 py-2">
+              {!dailyLessonCompleted && !showDailyLesson && (
+                <button
+                  onClick={() => { setShowDailyLesson(true); setShowPersonalityPicker(false); }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+                >
+                  <span>📚</span>
+                  <span>Start Lesson</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const drills = getDrills(profile?.target_language, profile?.user_level);
+                  setCurrentDrill(drills);
+                  setDrillIndex(0);
+                  setDrillResults([]);
+                  setDrillMode(true);
+                  setShowPersonalityPicker(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+              >
+                <span>🎯</span>
+                <span>Drills</span>
+              </button>
+              <button
+                onClick={() => { setShowPersonalityPicker(false); setShowPersonalityPicker(true); }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+              >
+                <span>{PERSONALITIES.find(p => p.id === tutorPersonality)?.emoji}</span>
+                <span>{PERSONALITIES.find(p => p.id === tutorPersonality)?.name}</span>
+              </button>
+              {profile?.is_pro && (
+                <button
+                  onClick={() => { setShowLessonInput(true); setShowPersonalityPicker(false); }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+                >
+                  <span>✨</span>
+                  <span>Custom Lesson</span>
+                </button>
+              )}
+              <div className="border-t border-border my-1" />
+              <select
+                value={correctionLanguage}
+                onChange={(e) => setCorrectionLanguage(e.target.value)}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors bg-transparent border-none outline-none"
+              >
+                <option value="en">English</option>
+                <option value="target">{profile?.target_language || 'Target Language'}</option>
+              </select>
+              <button
+                onClick={() => { setShowSummary(true); setShowPersonalityPicker(false); }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2 text-muted-foreground"
+              >
+                <span>⏸️</span>
+                <span>End Session</span>
+              </button>
+              {sessionMinutes > 0 && (
+                <div className="px-4 py-2 text-xs text-muted-foreground">
+                  Session: {sessionMinutes}m
+                </div>
+              )}
+            </div>
           )}
-          <div className={cn("w-2 h-2 rounded-full", isListening || isSpeaking ? "bg-green-400 animate-pulse" : "bg-green-400")} />
         </div>
       </div>
 
@@ -1802,26 +1834,39 @@ Reply with only valid JSON, no extra text.`
         </div>
       )}
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+      {/* Expanded Messages Container - 70-80% of viewport height */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0" style={{ height: '75vh' }}>
         {messages.map((msg, i) => (
           <AnimatePresence key={i}>
             <motion.div
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "justify-start")}
+              className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}
             >
+              {/* Message separator */}
+              {i > 0 && (
+                <div className="absolute left-0 right-0 h-px bg-border/30 -mt-2" />
+              )}
+
               <div className={cn(
-                "max-w-[82%] rounded-3xl px-4 py-3 shadow-sm",
+                "max-w-[85%] rounded-2xl px-4 py-3 shadow-sm relative",
                 msg.role === "user"
-                  ? "bg-secondary text-secondary-foreground rounded-br-sm"
-                  : "bg-card border border-border text-foreground rounded-bl-sm"
+                  ? "bg-indigo-500 text-white rounded-br-md"  // Indigo background for user
+                  : "bg-blue-50 border border-blue-100 text-gray-800 rounded-bl-md"  // Light blue for AI
               )}>
+                {/* Timestamp */}
+                <div className={cn(
+                  "text-[10px] opacity-70 mb-1",
+                  msg.role === "user" ? "text-white/80 text-right" : "text-gray-500"
+                )}>
+                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                </div>
+
                 {msg.role === "assistant" && msg.parsed?.word ? (
                   <>
                     {/* Reaction */}
                     {msg.parsed.reaction && (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap mb-3">{msg.parsed.reaction}</p>
+                      <p className="text-base leading-relaxed whitespace-pre-wrap mb-3">{msg.parsed.reaction}</p>
                     )}
                     {/* Word card */}
                     <div className="bg-primary/10 rounded-2xl p-4 mb-3 text-center animate-slide-up-bounce">
@@ -1839,16 +1884,16 @@ Reply with only valid JSON, no extra text.`
                     </div>
                     {/* Prompt */}
                     {msg.parsed.prompt && (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap mt-3">{msg.parsed.prompt}</p>
+                      <p className="text-base leading-relaxed whitespace-pre-wrap mt-3">{msg.parsed.prompt}</p>
                     )}
                   </>
                 ) : (
                   <>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">
                       {expandedMessageIndices[i] ? msg.textSync?.rawText || msg.content : msg.content}
                     </p>
                     {msg.role === "assistant" && (
-                      <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex items-center gap-2 mt-2">
                         <button
                           onClick={() => {
                             const textToSpeak = expandedMessageIndices[i]
@@ -1856,7 +1901,7 @@ Reply with only valid JSON, no extra text.`
                               : (msg.textSync?.ttsText || msg.content);
                             speak(textToSpeak);
                           }}
-                          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors"
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
                         >
                           <SpeakerWaveIcon className="w-3 h-3" />
                           {expandedMessageIndices[i] ? 'Play full' : 'Play'}
@@ -1876,7 +1921,7 @@ Reply with only valid JSON, no extra text.`
                                 speak(expandedText);
                               }
                             }}
-                            className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors"
+                            className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
                           >
                             <span>{expandedMessageIndices[i] ? 'Show less' : 'Show more'}</span>
                           </button>
@@ -1892,10 +1937,10 @@ Reply with only valid JSON, no extra text.`
 
         {/* WhatsApp Share Nudge after every 10th message */}
         {sessionMessages > 0 && sessionMessages % 10 === 0 && (
-          <div className="flex justify-center my-2">
+          <div className="flex justify-center my-4">
             <button
               onClick={() => shareContent(getShareText("default", { language: profile?.target_language }))}
-              className="text-xs text-muted-foreground hover:text-green-500 flex items-center gap-1 transition-colors"
+              className="text-xs text-muted-foreground hover:text-green-500 flex items-center gap-1 transition-colors px-3 py-1.5 rounded-full border border-border"
             >
               Enjoying Myno? Share with friends 📲
             </button>
@@ -1904,50 +1949,23 @@ Reply with only valid JSON, no extra text.`
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-card border border-border rounded-3xl rounded-bl-sm px-4 py-3">
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5 items-center">
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "160ms" }} />
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce-dot" style={{ animationDelay: "320ms" }} />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "0ms" }} />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "160ms" }} />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "320ms" }} />
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Input bar */}
-      <div className="glass border-t px-4 py-3">
-        {/* Big mic button */}
-        <div className="flex justify-center mb-3">
-          <button
-            onClick={isListening ? stopVoice : startVoiceInput}
-            className={cn(
-              "relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all scale-on-press",
-              isListening ? "bg-destructive shadow-red-300" : "bg-secondary shadow-sea"
-            )}
-          >
-            {isListening && <div className="absolute inset-0 rounded-full border-4 border-primary/60 animate-pulse-ring" style={{ borderColor: "#98FFD8" }} />}
-            {isListening
-              ? <StopIcon className="w-6 h-6 text-white" />
-              : <MicrophoneIcon className="w-6 h-6 text-white" />
-            }
-          </button>
-        </div>
-        {/* Pronunciation quality label */}
-        {pronunciationResult && (
-          <div className="text-center mb-1">
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${pronunciationResult.bg} ${pronunciationResult.color}`}>
-              {pronunciationResult.emoji} {pronunciationResult.label}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Confidence: {Math.round(pronunciationResult.confidence * 100)}%
-            </p>
-          </div>
-        )}
-        {/* Suggested reply chips */}
+      {/* Streamlined Input Area */}
+      <div className="glass border-t border-border/50 px-4 py-3">
+        {/* Contextual suggestions as small chips ABOVE input */}
         {suggestedReplies.length > 0 && !isLoading && (
-          <div className="flex gap-2 flex-wrap px-4 pb-2">
-            {suggestedReplies.map((reply) => (
+          <div className="flex gap-2 flex-wrap mb-2 px-1">
+            {suggestedReplies.slice(0, 3).map((reply) => (  // Show only 2-3 suggestions
               <button
                 key={reply}
                 onClick={() => { setInput(reply); setSuggestedReplies([]); }}
@@ -1956,13 +1974,83 @@ Reply with only valid JSON, no extra text.`
                 {reply}
               </button>
             ))}
+            {/* Collapsible hints button for extra suggestions */}
+            {suggestedReplies.length > 3 && (
+              <button
+                onClick={() => {
+                  // Show all suggestions in a dropdown or expand
+                  const remaining = suggestedReplies.slice(3);
+                  setSuggestedReplies([...suggestedReplies.slice(0, 3), ...remaining]);
+                }}
+                className="text-xs px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+              >
+                💡 More
+              </button>
+            )}
           </div>
         )}
-        {/* Scenario shortcut cards */}
+
+        {/* Pronunciation feedback (only show on error/low confidence) */}
+        {pronunciationResult && pronunciationResult.confidence < 0.7 && (
+          <div className="text-center mb-2">
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${pronunciationResult.bg} ${pronunciationResult.color}`}>
+              {pronunciationResult.emoji} {pronunciationResult.label}
+            </div>
+          </div>
+        )}
+
+        {/* Input row with smaller mic button */}
+        <div className="flex items-center gap-2">
+          {/* Smaller mic button */}
+          <button
+            onClick={isListening ? stopVoice : startVoiceInput}
+            className={cn(
+              "relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all scale-on-press",
+              isListening ? "bg-red-500" : "bg-primary"
+            )}
+          >
+            {isListening && <div className="absolute inset-0 rounded-full border-2 border-red-300 animate-pulse" />}
+            {isListening
+              ? <StopIcon className="w-4 h-4 text-white" />
+              : <MicrophoneIcon className="w-4 h-4 text-white" />
+            }
+          </button>
+
+          {/* Text input with clear button inside */}
+          <div className="flex-1 relative">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(input))}
+              placeholder="Type your message..."
+              className="w-full h-11 rounded-2xl border-2 border-border bg-background pl-4 pr-10 text-base font-medium outline-none focus:border-primary transition-colors"
+            />
+            {/* Clear button inside input (X) */}
+            {input.trim() && (
+              <button
+                onClick={() => setInput("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {/* Send button */}
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || isLoading}
+            className="w-11 h-11 rounded-2xl bg-primary text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-primary/90"
+          >
+            {isLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <PaperAirplaneIcon className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Scenario cards (collapsed by default, show as hint) */}
         {showScenarios && messages.length <= 1 && (
-          <div className="mb-3">
-            <div className="flex items-center justify-between px-4 mb-2">
-              <p className="text-sm font-medium text-foreground">Start a scenario</p>
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-foreground">Quick start scenarios</p>
               <button
                 onClick={() => setShowScenarios(false)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -1970,40 +2058,32 @@ Reply with only valid JSON, no extra text.`
                 Hide
               </button>
             </div>
-            <div className="flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
-              {SCENARIOS.map((scenario) => (
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {SCENARIOS.slice(0, 3).map((scenario) => (  // Show only 3 scenarios
                 <button
                   key={scenario.id}
                   onClick={() => sendMessage(scenario.prompt)}
-                  className="flex-shrink-0 w-32 h-28 rounded-2xl border border-border bg-card p-3 flex flex-col items-center justify-center text-center hover:bg-accent transition-colors"
+                  className="flex-shrink-0 w-28 h-20 rounded-xl border border-border bg-card p-2 flex flex-col items-center justify-center text-center hover:bg-accent transition-colors"
                 >
-                  <span className="text-2xl mb-2">{scenario.icon}</span>
-                  <span className="text-xs font-medium text-foreground">{scenario.label}</span>
-                  <span className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                    {scenario.prompt.substring(0, 40)}...
-                  </span>
+                  <span className="text-xl mb-1">{scenario.icon}</span>
+                  <span className="text-xs font-medium text-foreground truncate w-full">{scenario.label}</span>
                 </button>
               ))}
+              {SCENARIOS.length > 3 && (
+                <button
+                  onClick={() => {
+                    // Show all scenarios in a modal or expand
+                    setShowScenarios(true);
+                  }}
+                  className="flex-shrink-0 w-28 h-20 rounded-xl border border-border bg-muted p-2 flex flex-col items-center justify-center text-center hover:bg-muted/80 transition-colors"
+                >
+                  <span className="text-xl mb-1">💡</span>
+                  <span className="text-xs font-medium text-foreground">More scenarios</span>
+                </button>
+              )}
             </div>
           </div>
         )}
-        {/* Text input row */}
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(input))}
-            placeholder="Or type a message..."
-            className="flex-1 h-11 rounded-2xl border-2 border-border bg-background px-4 text-sm font-medium outline-none focus:border-secondary transition-colors"
-          />
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isLoading}
-            className="w-11 h-11 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-secondary/90"
-          >
-            {isLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <PaperAirplaneIcon className="w-4 h-4" />}
-          </button>
-        </div>
       </div>
     </div>
   );

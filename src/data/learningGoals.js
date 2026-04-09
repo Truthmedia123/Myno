@@ -4,6 +4,8 @@
  * @module learningGoals
  */
 
+import { normalizeLangCode } from '@/lib/langUtils.js';
+
 /**
  * @typedef {Object} CurriculumFocus
  * @property {string[]} grammar - Grammar point IDs to prioritize
@@ -127,7 +129,9 @@ export function isSyllabusRelevant(syllabus, goal) {
  * @returns {Promise<Object>} Syllabus object
  */
 async function getCurriculum(lang, cefr) {
-    const cacheKey = `curriculum_${lang}_${cefr}`;
+    // Normalize language code (e.g., "English" → "en")
+    const normalizedLang = normalizeLangCode(lang);
+    const cacheKey = `curriculum_${normalizedLang}_${cefr}`;
     // Check localStorage cache
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -139,14 +143,14 @@ async function getCurriculum(lang, cefr) {
     }
     try {
         // Correct relative path from src/data to src/curriculum (one level up)
-        const module = await import(`../curriculum/${lang}/${cefr}.js`);
+        const module = await import(`../curriculum/${normalizedLang}/${cefr}.js`);
         const syllabus = module.default || module;
         // Cache in localStorage (limited to 1 day)
         localStorage.setItem(cacheKey, JSON.stringify(syllabus));
         localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
         return syllabus;
     } catch (importError) {
-        console.warn(`Failed to load curriculum for ${lang}/${cefr}:`, importError);
+        console.warn(`Failed to load curriculum for ${normalizedLang}/${cefr}:`, importError);
         // Return a fallback empty syllabus
         return {
             grammar: [],
@@ -167,6 +171,8 @@ async function getCurriculum(lang, cefr) {
 export async function filterCurriculumByGoal(goalId, lang, userCefrLevel) {
     const goal = getGoalById(goalId);
     if (!goal) return [];
+    // Normalize language code (e.g., "English" → "en")
+    const normalizedLang = normalizeLangCode(lang);
     const { cefrLevels } = goal.curriculumFocus;
     // Determine which CEFR levels to load (those within goal's cefrLevels and not exceeding user level)
     const cefrOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -182,12 +188,12 @@ export async function filterCurriculumByGoal(goalId, lang, userCefrLevel) {
     const results = [];
     for (const cefr of levelsToLoad) {
         try {
-            const syllabus = await getCurriculum(lang, cefr);
+            const syllabus = await getCurriculum(normalizedLang, cefr);
             if (isSyllabusRelevant(syllabus, goal)) {
-                results.push({ lang, cefr, syllabus });
+                results.push({ lang: normalizedLang, cefr, syllabus });
             }
         } catch (error) {
-            console.warn(`Skipping ${lang}/${cefr} due to error:`, error);
+            console.warn(`Skipping ${normalizedLang}/${cefr} due to error:`, error);
         }
     }
     return results;
@@ -201,7 +207,9 @@ export async function filterCurriculumByGoal(goalId, lang, userCefrLevel) {
  * @returns {Promise<Object|null>} Most relevant syllabus object, or null if none
  */
 export async function getCurriculumForGoal(goalId, lang, userCefrLevel) {
-    const matches = await filterCurriculumByGoal(goalId, lang, userCefrLevel);
+    // Normalize language code (e.g., "English" → "en")
+    const normalizedLang = normalizeLangCode(lang);
+    const matches = await filterCurriculumByGoal(goalId, normalizedLang, userCefrLevel);
     if (matches.length === 0) return null;
     // Prefer syllabus with highest CEFR level that matches user level
     const cefrOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];

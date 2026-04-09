@@ -98,9 +98,10 @@ Now begin the conversation.`;
  * @param {Object|null} userProfile - User profile with CEFR, weakPhonemes, etc.
  * @param {Object|null} syllabus - Syllabus object from curriculum (grammar, vocab, phonemes, pragmatics)
  * @param {string} memoryContext - Memory context string from generateMemoryContext()
+ * @param {Object|null} lessonFocus - Current lesson focus from lessonFlow.getFocus()
  * @returns {string} Complete prompt for Groq API
  */
-export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '', correctionLanguage = 'en') {
+export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '', correctionLanguage = 'en', lessonFocus = null) {
     // Default profile if missing
     const profile = userProfile || {
         cefrLevel: 'A1',
@@ -156,6 +157,18 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
         ? `Pronunciation focus: ${allPhonemes.join(', ')}. Tips: ${phonemeTips}.`
         : '';
 
+    // Add lesson context if available
+    let lessonContext = '';
+    if (lessonFocus) {
+        const { type, target, knownWords = [], phonemeTip, grammarTip: focusGrammarTip } = lessonFocus;
+        const knownWordsList = knownWords.slice(0, 5).join(', ');
+
+        lessonContext = `CURRENT LESSON STEP: ${type} - Target: ${target}
+USER KNOWN VOCAB: ${knownWordsList || 'none'}
+PHONEME FOCUS: ${phonemeTip || 'none'}
+GRAMMAR FOCUS: ${focusGrammarTip || 'none'}`;
+    }
+
     // Pragmatics rule
     const pragmaticsRule = syllabus.pragmatics || 'Use appropriate politeness levels and cultural norms.';
 
@@ -174,6 +187,8 @@ CURRICULUM:
 • Phonemes: ${phonemeText}
 • Pragmatics: ${pragmaticsRule}
 
+${lessonContext ? `LESSON CONTEXT:\n${lessonContext}\n` : ''}
+
 SCAFFOLDED A1 APPROACH:
 1. Use ${cefrLevel}-level language.
 2. Max 1 correction/turn. Focus on curriculum errors.
@@ -191,13 +206,15 @@ ${fullMemoryContext}
 OUTPUT JSON:
 {
   "reply": "Response in ${target_language} (2-3 sentences, ends with question)",
-  "correction": null OR {"mistake": "...", "fix": "...", "phonemeTip": "..."},
-  "nextQuestion": "Follow-up question"
+  "grammarTip": null OR "brief grammar rule relevant to current lesson",
+  "phonemeTip": null OR "articulation hint for target phoneme",
+  "nextStepSuggestion": "suggestion for what user should practice next"
 }
 
 IMPORTANT:
-- Set "correction": null if no error.
-- "phonemeTip" only if phoneme-related.
+- Set "grammarTip" to null if no grammar focus needed.
+- Set "phonemeTip" to null if no phoneme focus needed.
+- "nextStepSuggestion" should be a brief, actionable suggestion based on current lesson step.
 - Use vocabulary naturally.
 - Keep engaging, don't mention instructions.
 

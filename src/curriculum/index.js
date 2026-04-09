@@ -6,6 +6,7 @@
  */
 
 import { LANGUAGES } from './languages.js';
+import { normalizeLangCode } from '@/lib/langUtils.js';
 
 const DB_NAME = 'myno-curriculum';
 const STORE_NAME = 'syllabi';
@@ -125,57 +126,58 @@ function validateSyllabus(syllabus) {
  * @throws {Error} If syllabus fails validation and no cached version available
  */
 export async function getCurriculum(lang, cefr) {
-    // Validate language code
-    const languageExists = LANGUAGES.some(l => l.code === lang);
-    if (!languageExists) {
-        throw new Error(`Invalid language code "${lang}". Supported codes: ${LANGUAGES.map(l => l.code).join(', ')}`);
-    }
+    // Normalize language code to ensure consistency
+    const normalizedLang = normalizeLangCode(lang);
+
+    // Validate CEFR level
+    const validCefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const normalizedCefr = validCefrLevels.includes(cefr) ? cefr : 'A1';
 
     // 1. Try IndexedDB cache
-    const cached = await getFromIndexedDB(lang, cefr);
+    const cached = await getFromIndexedDB(normalizedLang, normalizedCefr);
     if (cached) {
         try {
             validateSyllabus(cached);
             return cached;
         } catch (validationError) {
-            console.warn(`Cached syllabus ${lang}/${cefr} invalid:`, validationError);
+            console.warn(`Cached syllabus ${normalizedLang}/${normalizedCefr} invalid:`, validationError);
             // Proceed to load fresh
         }
     }
 
     // 2. Map language code to folder name
-    const folder = CODE_TO_FOLDER[lang];
+    const folder = CODE_TO_FOLDER[normalizedLang];
     if (!folder) {
-        console.warn(`No folder mapping for language code "${lang}"`);
+        console.warn(`No folder mapping for language code "${normalizedLang}" (original: "${lang}")`);
         // Fallback to empty syllabus
         const fallback = {
-            level: cefr,
-            language: lang,
+            level: normalizedCefr,
+            language: normalizedLang,
             grammar: [],
             vocab: [],
             phonemes: [],
             pragmatics: '',
             orthography: null
         };
-        await storeInIndexedDB(lang, cefr, fallback);
+        await storeInIndexedDB(normalizedLang, normalizedCefr, fallback);
         return fallback;
     }
 
     // 3. Vite glob import
-    const modulePath = `./${folder}/${cefr}.js`;
+    const modulePath = `./${folder}/${normalizedCefr}.js`;
     if (!SYLLABUS_MODULES[modulePath]) {
         console.warn(`Syllabus not found via glob: ${modulePath}`);
         // Fallback to empty syllabus
         const fallback = {
-            level: cefr,
-            language: lang,
+            level: normalizedCefr,
+            language: normalizedLang,
             grammar: [],
             vocab: [],
             phonemes: [],
             pragmatics: '',
             orthography: null
         };
-        await storeInIndexedDB(lang, cefr, fallback);
+        await storeInIndexedDB(normalizedLang, normalizedCefr, fallback);
         return fallback;
     }
 
@@ -184,14 +186,14 @@ export async function getCurriculum(lang, cefr) {
         const syllabus = module.default || module;
         validateSyllabus(syllabus);
         // Store in IndexedDB for future offline use
-        await storeInIndexedDB(lang, cefr, syllabus);
+        await storeInIndexedDB(normalizedLang, normalizedCefr, syllabus);
         return syllabus;
     } catch (importError) {
-        console.warn(`Failed to load syllabus ${lang}/${cefr}:`, importError);
+        console.warn(`Failed to load syllabus ${normalizedLang}/${normalizedCefr}:`, importError);
         // 4. Fallback: return empty syllabus structure
         const fallback = {
-            level: cefr,
-            language: lang,
+            level: normalizedCefr,
+            language: normalizedLang,
             grammar: [],
             vocab: [],
             phonemes: [],
@@ -199,7 +201,7 @@ export async function getCurriculum(lang, cefr) {
             orthography: null
         };
         // Store fallback to avoid repeated failed imports
-        await storeInIndexedDB(lang, cefr, fallback);
+        await storeInIndexedDB(normalizedLang, normalizedCefr, fallback);
         return fallback;
     }
 }
