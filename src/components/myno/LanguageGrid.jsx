@@ -1,25 +1,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-
-const LANGUAGES = [
-  { code: "en", name: "English", flag: "🇺🇸" },
-  { code: "es", name: "Spanish", flag: "🇪🇸" },
-  { code: "fr", name: "French", flag: "🇫🇷" },
-  { code: "de", name: "German", flag: "🇩🇪" },
-  { code: "it", name: "Italian", flag: "🇮🇹" },
-  { code: "pt", name: "Portuguese", flag: "🇧🇷" },
-  { code: "ja", name: "Japanese", flag: "🇯🇵" },
-  { code: "ko", name: "Korean", flag: "🇰🇷" },
-  { code: "zh", name: "Chinese", flag: "🇨🇳" },
-  { code: "ar", name: "Arabic", flag: "🇸🇦" },
-  { code: "hi", name: "Hindi", flag: "🇮🇳" },
-  { code: "ru", name: "Russian", flag: "🇷🇺" },
-  { code: "nl", name: "Dutch", flag: "🇳🇱" },
-  { code: "tr", name: "Turkish", flag: "🇹🇷" },
-  { code: "sv", name: "Swedish", flag: "🇸🇪" },
-  { code: "el", name: "Greek", flag: "🇬🇷" },
-];
+import { LANGUAGES } from "@/curriculum";
 
 export default function LanguageGrid({ selected, onSelect }) {
   return (

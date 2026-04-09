@@ -18,6 +18,7 @@ import { getCurriculum, clearCurriculumCache } from "@/curriculum/index.js";
 import { filterCurriculumByGoal } from "@/data/learningGoals.js";
 import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
 import { validateA1Compliance } from "@/lib/a1Simplifier";
+import { prepareResponse, expandResponse, needsExpansion } from "@/lib/textSync";
 
 const replySets = [
   ["Tell me more", "Give me an example", "Too hard, simplify"],
@@ -64,6 +65,7 @@ export default function Chat() {
   const [currentDrill, setCurrentDrill] = useState(null);
   const [drillResults, setDrillResults] = useState([]);
   const [drillIndex, setDrillIndex] = useState(0);
+  const [expandedMessageIndices, setExpandedMessageIndices] = useState({});
   const [showLessonInput, setShowLessonInput] = useState(false);
   const [lessonTopic, setLessonTopic] = useState("");
   const [generatingLesson, setGeneratingLesson] = useState(false);
@@ -967,17 +969,30 @@ Reply with only valid JSON, no extra text.`
           console.warn('[A1] Simplified AI reply');
         }
 
+        // Synchronize display and TTS text
+        const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+          maxLength: 25,
+          targetLang: profile?.target_language || 'en',
+          showExpand: true
+        });
+
         // Store next question for context continuity
         if (aiParsed.nextQuestion) {
           setNextQuestion(aiParsed.nextQuestion);
         }
 
-        // Display only reply in message list (use A1-safe version)
+        // Display only reply in message list (use synchronized version)
         const assistantMsg = {
           role: "assistant",
-          content: a1SafeReply,
+          content: displayText,
           parsed: aiParsed,
-          correction: aiParsed.correction
+          correction: aiParsed.correction,
+          textSync: {
+            displayText,
+            ttsText,
+            isTruncated,
+            rawText: a1SafeReply
+          }
         };
         const finalMessages = [...updatedMessages, assistantMsg];
         setMessages(finalMessages);
@@ -1048,16 +1063,29 @@ Reply with only valid JSON, no extra text.`
             console.warn('[A1] Simplified AI reply');
           }
 
+          // Synchronize display and TTS text
+          const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+            maxLength: 25,
+            targetLang: profile?.target_language || 'en',
+            showExpand: true
+          });
+
           // Store nextQuestion for context continuity
           if (aiParsed.nextQuestion) {
             setNextQuestion(aiParsed.nextQuestion);
           }
 
-          // Display only the reply in the message list (use A1-safe version)
+          // Display only the reply in the message list (use synchronized version)
           const assistantMsg = {
             role: "assistant",
-            content: a1SafeReply,
-            parsed: aiParsed
+            content: displayText,
+            parsed: aiParsed,
+            textSync: {
+              displayText,
+              ttsText,
+              isTruncated,
+              rawText: a1SafeReply
+            }
           };
           const finalMessages = [...updatedMessages, assistantMsg];
           setMessages(finalMessages);
@@ -1082,8 +1110,8 @@ Reply with only valid JSON, no extra text.`
             extractAndStoreMistake(userId, msg, responseText, profile.target_language);
           }
 
-          // Speak the reply (not the whole JSON)
-          speak(aiParsed.reply);
+          // Speak the synchronized TTS text (not the whole JSON)
+          speak(ttsText);
           extractAndSaveWord(aiParsed.reply, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
 
           // Update user memory with topics from this conversation
@@ -1126,16 +1154,29 @@ Reply with only valid JSON, no extra text.`
         console.warn('[A1] Simplified AI reply');
       }
 
+      // Synchronize display and TTS text
+      const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+        maxLength: 25,
+        targetLang: profile?.target_language || 'en',
+        showExpand: true
+      });
+
       // Store nextQuestion for context continuity
       if (aiParsed.nextQuestion) {
         setNextQuestion(aiParsed.nextQuestion);
       }
 
-      // Display only the reply in the message list (use A1-safe version)
+      // Display only the reply in the message list (use synchronized version)
       const assistantMsg = {
         role: "assistant",
-        content: a1SafeReply,
-        parsed: aiParsed
+        content: displayText,
+        parsed: aiParsed,
+        textSync: {
+          displayText,
+          ttsText,
+          isTruncated,
+          rawText: a1SafeReply
+        }
       };
       const finalMessages = [...updatedMessages, assistantMsg];
       setMessages(finalMessages);
@@ -1154,8 +1195,8 @@ Reply with only valid JSON, no extra text.`
         extractAndStoreMistake(userId, msg, responseText, profile.target_language);
       }
 
-      // Speak the reply (not the whole JSON)
-      speak(aiParsed.reply);
+      // Speak the synchronized TTS text (not the whole JSON)
+      speak(ttsText);
       extractAndSaveWord(aiParsed.reply, profile?.target_language || "English", profile?.native_language || "English").catch(e => console.error("Extract word error:", e));
 
       // Update user memory with topics from this conversation
@@ -1803,15 +1844,44 @@ Reply with only valid JSON, no extra text.`
                   </>
                 ) : (
                   <>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {expandedMessageIndices[i] ? msg.textSync?.rawText || msg.content : msg.content}
+                    </p>
                     {msg.role === "assistant" && (
-                      <button
-                        onClick={() => speak(msg.content)}
-                        className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors"
-                      >
-                        <SpeakerWaveIcon className="w-3 h-3" />
-                        Play
-                      </button>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <button
+                          onClick={() => {
+                            const textToSpeak = expandedMessageIndices[i]
+                              ? expandResponse(msg.textSync?.rawText || msg.content)
+                              : (msg.textSync?.ttsText || msg.content);
+                            speak(textToSpeak);
+                          }}
+                          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors"
+                        >
+                          <SpeakerWaveIcon className="w-3 h-3" />
+                          {expandedMessageIndices[i] ? 'Play full' : 'Play'}
+                        </button>
+                        {msg.textSync?.isTruncated && (
+                          <button
+                            onClick={() => {
+                              const isExpanded = expandedMessageIndices[i];
+                              // Toggle expansion
+                              setExpandedMessageIndices(prev => ({
+                                ...prev,
+                                [i]: !isExpanded
+                              }));
+                              // If expanding, speak the full text
+                              if (!isExpanded) {
+                                const expandedText = expandResponse(msg.textSync.rawText);
+                                speak(expandedText);
+                              }
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors"
+                          >
+                            <span>{expandedMessageIndices[i] ? 'Show less' : 'Show more'}</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </>
                 )}

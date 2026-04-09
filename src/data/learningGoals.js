@@ -138,31 +138,22 @@ async function getCurriculum(lang, cefr) {
         }
     }
     try {
-        // Try relative path from src/data to curriculum at project root (two levels up)
-        const module = await import(`../../curriculum/${lang}/${cefr}.js`);
+        // Correct relative path from src/data to src/curriculum (one level up)
+        const module = await import(`../curriculum/${lang}/${cefr}.js`);
         const syllabus = module.default || module;
         // Cache in localStorage (limited to 1 day)
         localStorage.setItem(cacheKey, JSON.stringify(syllabus));
         localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
         return syllabus;
-    } catch (firstError) {
-        try {
-            // Fallback: curriculum inside src (one level up)
-            const module = await import(`../curriculum/${lang}/${cefr}.js`);
-            const syllabus = module.default || module;
-            localStorage.setItem(cacheKey, JSON.stringify(syllabus));
-            localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
-            return syllabus;
-        } catch (secondError) {
-            console.warn(`Failed to load curriculum for ${lang}/${cefr}:`, secondError);
-            // Return a fallback empty syllabus
-            return {
-                grammar: [],
-                vocabThemes: [],
-                phonemes: [],
-                cefr
-            };
-        }
+    } catch (importError) {
+        console.warn(`Failed to load curriculum for ${lang}/${cefr}:`, importError);
+        // Return a fallback empty syllabus
+        return {
+            grammar: [],
+            vocabThemes: [],
+            phonemes: [],
+            cefr
+        };
     }
 }
 

@@ -84,12 +84,101 @@ export const EXPANDED_A1_VOCAB = new Set([
 ]);
 
 /**
- * Ultra-simple questions for A1 learners.
- * @type {string[]}
+ * Language‑appropriate ultra‑simple questions for A1 learners.
+ * Each array contains single‑word questions with proper punctuation for the language.
+ * @type {Object.<string, string[]>}
  */
-const A1_QUESTIONS = [
-    '¿Sí?', '¿No?', '¿Agua?', '¿Pan?', '¿Casa?', '¿Baño?', '¿Cómo?', '¿Dónde?', '¿Cuánto?'
-];
+const LANGUAGE_ENDINGS = {
+    // Spanish
+    es: ['¿Sí?', '¿No?', '¿Agua?', '¿Pan?', '¿Casa?', '¿Baño?', '¿Cómo?', '¿Dónde?', '¿Cuánto?'],
+    // English
+    en: ['Yes?', 'No?', 'Water?', 'Bread?', 'House?', 'Bathroom?', 'How?', 'Where?', 'How much?'],
+    // French
+    fr: ['Oui?', 'Non?', 'Eau?', 'Pain?', 'Maison?', 'Toilette?', 'Comment?', 'Où?', 'Combien?'],
+    // German
+    de: ['Ja?', 'Nein?', 'Wasser?', 'Brot?', 'Haus?', 'Bad?', 'Wie?', 'Wo?', 'Wie viel?'],
+    // Italian
+    it: ['Sì?', 'No?', 'Acqua?', 'Pane?', 'Casa?', 'Bagno?', 'Come?', 'Dove?', 'Quanto?'],
+    // Portuguese
+    pt: ['Sim?', 'Não?', 'Água?', 'Pão?', 'Casa?', 'Banheiro?', 'Como?', 'Onde?', 'Quanto?'],
+    // Japanese (using Japanese punctuation？)
+    ja: ['はい？', 'いいえ？', '水？', 'パン？', '家？', 'トイレ？', 'どう？', 'どこ？', 'いくら？'],
+    // Korean
+    ko: ['네?', '아니요?', '물?', '빵?', '집?', '화장실?', '어떻게?', '어디?', '얼마?'],
+    // Mandarin Chinese
+    zh: ['是？', '不？', '水？', '面包？', '房子？', '厕所？', '怎么？', '哪里？', '多少钱？'],
+    // Arabic (right‑to‑left, with Arabic question mark؟)
+    ar: ['نعم؟', 'لا؟', 'ماء؟', 'خبز؟', 'بيت؟', 'حمام؟', 'كيف؟', 'أين؟', 'كم؟'],
+    // Hindi
+    hi: ['हाँ?', 'नहीं?', 'पानी?', 'रोटी?', 'घर?', 'बाथरूम?', 'कैसे?', 'कहाँ?', 'कितना?'],
+    // Russian
+    ru: ['Да?', 'Нет?', 'Вода?', 'Хлеб?', 'Дом?', 'Туалет?', 'Как?', 'Где?', 'Сколько?'],
+    // Dutch
+    nl: ['Ja?', 'Nee?', 'Water?', 'Brood?', 'Huis?', 'Badkamer?', 'Hoe?', 'Waar?', 'Hoeveel?'],
+    // Turkish
+    tr: ['Evet?', 'Hayır?', 'Su?', 'Ekmek?', 'Ev?', 'Tuvalet?', 'Nasıl?', 'Nerede?', 'Ne kadar?'],
+    // Swedish
+    sv: ['Ja?', 'Nej?', 'Vatten?', 'Bröd?', 'Hus?', 'Badrum?', 'Hur?', 'Var?', 'Hur mycket?'],
+    // Greek
+    el: ['Ναι?', 'Όχι?', 'Νερό?', 'Ψωμί?', 'Σπίτι?', 'Μπάνιο?', 'Πώς?', 'Πού?', 'Πόσο?']
+};
+
+/**
+ * Multilingual punctuation characters.
+ * Includes ASCII and non‑ASCII question marks, exclamation marks, periods.
+ * Used for sentence splitting and end‑of‑sentence detection.
+ */
+const MULTILINGUAL_PUNCTUATION = {
+    QUESTION_MARKS: ['?', '؟', '？'], // ASCII, Arabic, Fullwidth
+    EXCLAMATION_MARKS: ['!', '！'], // ASCII, Fullwidth
+    PERIODS: ['.', '。'], // ASCII, Chinese/Japanese
+    ALL: /[.?؟？！！。!]/ // Regex matching any sentence-ending punctuation (including ASCII !)
+};
+
+/**
+ * Regex for splitting text into sentences.
+ * Matches sequences of multilingual sentence-ending punctuation.
+ */
+const SENTENCE_SPLIT_REGEX = /[.?؟？！！。!]+/;
+
+/**
+ * Check if text ends with any multilingual question mark.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function endsWithQuestionMark(text) {
+    if (!text || typeof text !== 'string') return false;
+    return MULTILINGUAL_PUNCTUATION.QUESTION_MARKS.some(mark => text.endsWith(mark));
+}
+
+/**
+ * Check if text ends with any sentence-ending punctuation.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function endsWithSentencePunctuation(text) {
+    if (!text || typeof text !== 'string') return false;
+    return MULTILINGUAL_PUNCTUATION.ALL.test(text.charAt(text.length - 1));
+}
+
+/**
+ * Remove multilingual punctuation from a word.
+ * @param {string} word
+ * @returns {string}
+ */
+function stripPunctuation(word) {
+    return word.replace(/[.,!?؟？！！。;:]/g, '');
+}
+
+/**
+ * Get language‑appropriate simple questions.
+ * Falls back to Spanish if language not found.
+ * @param {string} langCode - Two‑letter language code (e.g., 'es', 'fr')
+ * @returns {string[]} Array of simple questions
+ */
+function getLanguageQuestions(langCode) {
+    return LANGUAGE_ENDINGS[langCode] || LANGUAGE_ENDINGS.es;
+}
 
 /**
  * Determines if text is in English (simple detection).
@@ -142,8 +231,8 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     // Combine allowed vocab
     const allowedWords = new Set([...EXPANDED_A1_VOCAB, ...syllabusVocab.map(w => w.toLowerCase())]);
 
-    // Split into sentences
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    // Split into sentences using multilingual punctuation
+    const sentences = text.split(SENTENCE_SPLIT_REGEX).filter(s => s.trim().length > 0);
     const processedSentences = sentences.map(sentence => {
         const words = sentence.trim().split(/\s+/);
         const replacements = [];
@@ -151,7 +240,7 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
         // Identify complex words
         const complexIndices = [];
         words.forEach((word, idx) => {
-            const clean = word.toLowerCase().replace(/[.,!?;:]/g, '');
+            const clean = stripPunctuation(word.toLowerCase());
             if (clean.length > 0 && !allowedWords.has(clean)) {
                 complexIndices.push(idx);
             }
@@ -161,7 +250,7 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
         const replaceIndices = complexIndices.slice(0, 2);
         const newWords = words.map((word, idx) => {
             if (!replaceIndices.includes(idx)) return word;
-            const clean = word.toLowerCase().replace(/[.,!?;:]/g, '');
+            const clean = stripPunctuation(word.toLowerCase());
             // Keep original word and add English hint in parentheses
             return `${word} (${clean})`;
         });
@@ -170,7 +259,7 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     });
 
     let result = processedSentences.join('. ');
-    if (result.length > 0 && !result.endsWith('.') && !result.endsWith('?') && !result.endsWith('!')) {
+    if (result.length > 0 && !endsWithSentencePunctuation(result)) {
         result += '.';
     }
     return result.trim();
@@ -237,14 +326,16 @@ export function validateA1Teaching(reply, syllabus) {
  * Preserved for backward compatibility.
  * @param {string} text - The original text to simplify.
  * @param {string[]} syllabusVocab - Additional vocabulary from current syllabus.
+ * @param {string} langCode - Two‑letter language code (e.g., 'es', 'fr'). Defaults to 'es' for backward compatibility.
  * @returns {string} Simplified A1-safe text.
  */
-export function simplifyToA1(text, syllabusVocab = []) {
+export function simplifyToA1(text, syllabusVocab = [], langCode = 'es') {
     if (!text || typeof text !== 'string') return text;
 
     // Use gentle simplification but keep ultra‑simple question append
     const simplified = gentleSimplify(text, syllabusVocab, 'en');
-    const randomQuestion = A1_QUESTIONS[Math.floor(Math.random() * A1_QUESTIONS.length)];
+    const questions = getLanguageQuestions(langCode);
+    const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
     return `${simplified} ${randomQuestion}`.trim();
 }
 
@@ -253,14 +344,16 @@ export function simplifyToA1(text, syllabusVocab = []) {
  * If not compliant, returns a simplified version (legacy).
  * Preserved for backward compatibility.
  * @param {string} reply - The AI reply to validate.
- * @param {Object} syllabus - Current syllabus with vocab array.
+ * @param {Object} syllabus - Current syllabus with vocab array and language code.
  * @param {string[]} syllabus.vocab - Vocabulary words from syllabus.
+ * @param {string} syllabus.language - Two‑letter language code (e.g., 'es', 'fr').
  * @returns {string} A1-compliant reply.
  */
 export function validateA1Compliance(reply, syllabus = { vocab: [] }) {
     if (!reply || typeof reply !== 'string') return reply;
 
     const syllabusVocab = syllabus.vocab || [];
+    const langCode = syllabus.language || 'es'; // Default to Spanish for backward compatibility
     const { isTeaching, simplifiedReply } = validateA1Teaching(reply, syllabus);
 
     // If teaching, allow longer sentences
@@ -268,7 +361,7 @@ export function validateA1Compliance(reply, syllabus = { vocab: [] }) {
         // Still apply basic length limits
         const words = simplifiedReply.split(/\s+/).filter(w => w.length > 0);
         if (words.length > 20) {
-            return simplifyToA1(reply, syllabusVocab);
+            return simplifyToA1(reply, syllabusVocab, langCode);
         }
         return simplifiedReply;
     }
@@ -276,21 +369,21 @@ export function validateA1Compliance(reply, syllabus = { vocab: [] }) {
     // Non‑teaching: enforce stricter checks
     const words = reply.split(/\s+/).filter(w => w.length > 0);
     if (words.length > 10) {
-        return simplifyToA1(reply, syllabusVocab);
+        return simplifyToA1(reply, syllabusVocab, langCode);
     }
 
     // Check for complex grammar patterns (subjunctive, conditional, etc.)
     const complexGrammarRegex = /que\s+[a-z]+[ae]s|si\s+[a-z]+[ae]r|porque|había|tendré|quiera|subjuntivo|condicional|imperfecto/i;
     if (complexGrammarRegex.test(reply)) {
-        return simplifyToA1(reply, syllabusVocab);
+        return simplifyToA1(reply, syllabusVocab, langCode);
     }
 
     // Check sentence length (max 7 words per sentence for practice)
-    const sentences = reply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = reply.split(SENTENCE_SPLIT_REGEX).filter(s => s.trim().length > 0);
     for (const sentence of sentences) {
         const sentenceWords = sentence.trim().split(/\s+/).filter(w => w.length > 0);
         if (sentenceWords.length > 7) {
-            return simplifyToA1(reply, syllabusVocab);
+            return simplifyToA1(reply, syllabusVocab, langCode);
         }
     }
 

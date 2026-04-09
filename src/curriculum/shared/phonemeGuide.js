@@ -73,6 +73,16 @@ export const PHONEME_GUIDE = {
             en: "Link words like 'an apple' becomes 'a napple'."
         }
     },
+    "Uvular r (French r)": {
+        description: "Uvular trill/fricative",
+        articulation: "Produced by vibrating the uvula (back of throat). Not a rolled tongue tip. Similar to gargling sound.",
+        minimalPairs: ["rouge (red) vs rouge (no minimal pair)", "Paris vs pari (bet)", "rare vs raire (to bray)"],
+        ttsExample: "Le rouge rend rare le rire à Paris.",
+        languageVariants: {
+            fr: "Le 'r' français est uvulaire, pas alvéolaire.",
+            en: "Practice gargling gently to feel the uvula vibration."
+        }
+    },
 
     // German phonemes
     "'ch' sound (Bach/ich)": {
@@ -228,6 +238,104 @@ export const PHONEME_GUIDE = {
         }
     },
 
+    // Italian phonemes
+    "Geminates (doubled consonants)": {
+        description: "Long (geminate) consonants",
+        articulation: "Hold consonant sound longer with more muscular tension. Distinguishes meaning in Italian.",
+        minimalPairs: ["casa (house) vs cassa (cash register)", "pala (shovel) vs palla (ball)", "note (notes) vs notte (night)"],
+        ttsExample: "La palla è nella cassa della casa.",
+        languageVariants: {
+            it: "Le consonanti doppie si pronunciano più lunghe.",
+            en: "Hold the consonant longer, like 'bookkeeper' with double k."
+        }
+    },
+    "'gli' sound": {
+        description: "Palatal lateral approximant",
+        articulation: "Place tongue against hard palate, let air flow around sides. Similar to 'lli' in 'million'.",
+        minimalPairs: ["figlio (son) vs filo (thread)", "aglio (garlic) vs alio (I nourish)", "meglio (better) vs melio (honey)"],
+        ttsExample: "Il figlio mangia l'aglio con il meglio.",
+        languageVariants: {
+            it: "La lingua tocca il palato, l'aria esce dai lati.",
+            en: "Like 'lli' in 'million' or 'brilliant'."
+        }
+    },
+    "Open/Closed vowels": {
+        description: "Contrast between open and closed e/o",
+        articulation: "Open è/ò: jaw lower, mouth more open. Closed é/ó: jaw higher, mouth less open.",
+        minimalPairs: ["pesca (peach) vs pesca (fishing)", "corso (course) vs corso (run)", "vento (wind) vs vento (I sell)"],
+        ttsExample: "È un bel corso di corsa con la pesca.",
+        languageVariants: {
+            it: "È aperta, é chiusa; ò aperta, ó chiusa.",
+            en: "Open e as in 'bet', closed e as in 'bay'; open o as in 'law', closed o as in 'go'."
+        }
+    },
+
+    // Portuguese phonemes
+    "Nasal vowels (ão/õe)": {
+        description: "Nasalized vowel sounds",
+        articulation: "Air flows through nose and mouth simultaneously. Lower velum to allow nasal resonance.",
+        minimalPairs: ["pão (bread) vs pau (stick)", "mão (hand) vs mau (bad)", "não (no) vs nau (ship)"],
+        ttsExample: "O pão na mão não é mau.",
+        languageVariants: {
+            pt: "O ar sai pelo nariz e boca ao mesmo tempo.",
+            en: "Pinch nose to feel vibration; like 'on' in French 'bon'."
+        }
+    },
+    "'lh' sound": {
+        description: "Palatal lateral approximant",
+        articulation: "Similar to Italian 'gli'. Tongue against hard palate, air flows around sides.",
+        minimalPairs: ["filho (son) vs fio (thread)", "mulher (woman) vs muer (they die)", "trabalho (work) vs trabalho (I work)"],
+        ttsExample: "O filho da mulher faz trabalho.",
+        languageVariants: {
+            pt: "Língua no palato, ar pelos lados.",
+            en: "Like 'lli' in 'million' or Spanish 'll' in some dialects."
+        }
+    },
+    "'r' sound (gutural)": {
+        description: "Uvular/guttural r",
+        articulation: "Produced in back of throat (uvular). Stronger at word beginning, softer between vowels.",
+        minimalPairs: ["rato (mouse) vs gato (cat)", "carro (car) vs caro (expensive)", "porta (door) vs posta (mail)"],
+        ttsExample: "O rato corre no carro pela porta.",
+        languageVariants: {
+            pt: "Som gutural, na parte de trás da garganta.",
+            en: "Similar to French r but less fricative."
+        }
+    },
+
+    // Russian phonemes
+    "Palatalization (soft signs)": {
+        description: "Soft (palatalized) consonants",
+        articulation: "Raise middle of tongue toward hard palate while pronouncing consonant. Indicated by soft sign (ь) or vowel letters.",
+        minimalPairs: ["мат (checkmate) vs мать (mother)", "брат (brother) vs брать (to take)", "угол (corner) vs уголь (coal)"],
+        ttsExample: "Мать брала уголь в углу.",
+        languageVariants: {
+            ru: "Мягкие согласные палатализованы.",
+            en: "Add a 'y' sound after consonant (e.g., 'ny' in 'canyon')."
+        }
+    },
+    "Vowel reduction": {
+        description: "Reduction of unstressed vowels",
+        articulation: "Unstressed 'o' becomes [a]-like, 'e' becomes [i]-like. Reduces vowel quality in non‑stressed syllables.",
+        minimalPairs: ["молоко (milk) pronounced малако", "телефон (telephone) pronounced тилифон", "хорошо (good) pronounced харашо"],
+        ttsExample: "Молоко и телефон хорошо.",
+        languageVariants: {
+            ru: "Безударные гласные редуцируются.",
+            en: "Unstressed vowels become more central/schwa‑like."
+        }
+    },
+
+    // Korean phonemes
+    "'r/l' sound": {
+        description: "Alveolar flap / lateral approximant",
+        articulation: "Between vowels: tongue taps alveolar ridge (flap). At syllable end: tongue tip to alveolar ridge, air flows sides (lateral).",
+        minimalPairs: ["라디오 (radio) vs 다디오", "말 (word) vs 발 (foot)", "갈 (go) vs 갓 (hat)"],
+        ttsExample: "라디오에서 말을 갈라.",
+        languageVariants: {
+            ko: "모음 사이에서는 'ㄹ'이 탄음, 끝에서는 설측음.",
+            en: "Between vowels like Spanish single r; syllable‑final like light l."
+        }
+    },
+
     // English phonemes
     "'th' sounds (think/that)": {
         description: "Dental fricatives (voiceless /θ/ and voiced /ð/)",
@@ -248,7 +356,158 @@ export const PHONEME_GUIDE = {
             en: "'v' uses teeth, 'w' uses rounded lips.",
             hi: "'v' दांतों से, 'w' होंठ गोल करके।"
         }
+    },
+
+    // English phonemes (additional)
+    "r vs l": {
+        description: "Alveolar approximant vs lateral approximant",
+        articulation: "R: tongue curls back but doesn't touch roof. L: tongue tip touches alveolar ridge.",
+        minimalPairs: ["right vs light", "red vs led", "fry vs fly", "grass vs glass"],
+        ttsExample: "The red light led right to the glass.",
+        languageVariants: {
+            en: "R: tongue back, L: tongue tip up.",
+            ja: "Rは舌を後ろに、Lは舌先を歯茎に。"
+        }
+    },
+    "short/long vowels (ship/sheep)": {
+        description: "Short I (ɪ) vs long E (iː)",
+        articulation: "Short I (ɪ): tongue slightly lower and more central. Long E (iː): tongue higher and front, held longer.",
+        minimalPairs: ["ship vs sheep", "bit vs beat", "fit vs feet", "sit vs seat"],
+        ttsExample: "The sheep on the ship beat the seat.",
+        languageVariants: {
+            en: "Hold the long vowel longer.",
+            es: "Mantenga la vocal larga más tiempo."
+        }
+    },
+
+    // Dutch phonemes
+    "guttural g": {
+        description: "Voiced velar fricative",
+        articulation: "Produced in the back of the throat. In northern Dutch it's harder (like clearing throat), in southern softer.",
+        minimalPairs: ["goed (good) vs koet", "geen (none) vs keen", "graag (gladly) vs kraag"],
+        ttsExample: "Goed geen graag.",
+        languageVariants: {
+            nl: "Harde g in het noorden, zachte g in het zuiden.",
+            en: "Like clearing throat gently."
+        }
+    },
+    "ui/ij diphthongs": {
+        description: "Unique Dutch diphthongs",
+        articulation: "UI: start with 'a' as in 'cat', glide to 'ee' with rounded lips. IJ: similar to 'eye' but shorter.",
+        minimalPairs: ["huis (house) vs haas", "muis (mouse) vs maas", "bruin (brown) vs braun"],
+        ttsExample: "Een bruine muis in het huis.",
+        languageVariants: {
+            nl: "UI: a+ie met ronde lippen.",
+            en: "Not found in English."
+        }
+    },
+    "schwa reduction": {
+        description: "Reduction of unstressed vowels to schwa",
+        articulation: "Unstressed vowels often reduce to schwa (ə), a neutral mid-central vowel.",
+        minimalPairs: ["de (the) vs da", "een (a) vs aan", "werken (to work) vs warken"],
+        ttsExample: "De een werkt.",
+        languageVariants: {
+            nl: "Onbeklemtoonde klinkers worden vaak ə.",
+            en: "Like the 'a' in 'about'."
+        }
+    },
+
+    // Turkish phonemes
+    "vowel harmony (front/back)": {
+        description: "Vowel harmony rules",
+        articulation: "Turkish has 8 vowels. Front: e, i, ö, ü. Back: a, ı, o, u. Suffixes change according to vowel harmony.",
+        minimalPairs: ["ev (house) vs eve", "okul (school) vs okula", "elma (apple) vs elmalar"],
+        ttsExample: "Evde okula gidiyor.",
+        languageVariants: {
+            tr: "Ön ve arka ünlü uyumu.",
+            en: "Suffix vowels match preceding vowel."
+        }
+    },
+    "soft ğ (yumuşak ge)": {
+        description: "Silent letter that lengthens preceding vowel",
+        articulation: "Between vowels it creates a glide. At word end it lengthens preceding vowel.",
+        minimalPairs: ["dağ (mountain) vs da", "ağaç (tree) vs açaç", "yoğurt (yogurt) vs yort"],
+        ttsExample: "Dağdaki ağaç yoğurt.",
+        languageVariants: {
+            tr: "Ğ sesi uzatır.",
+            en: "Silent, lengthens vowel."
+        }
+    },
+    "dotted/dotless i": {
+        description: "Dotted i (i) vs dotless ı (ı)",
+        articulation: "Dotted i (i) is like English 'ee'. Dotless ı (ı) is a close back unrounded vowel.",
+        minimalPairs: ["kız (girl) vs kiz", "ışık (light) vs işik", "sıcak (hot) vs sicak"],
+        ttsExample: "Kız ışık sıcak.",
+        languageVariants: {
+            tr: "Noktalı i ve noktasız ı.",
+            en: "Dotless i is like 'e' in 'roses'."
+        }
+    },
+
+    // Swedish phonemes
+    "pitch accent (accent 1/2)": {
+        description: "Swedish pitch accent distinction",
+        articulation: "Accent 1: falling pitch on first syllable. Accent 2: falling‑rising pitch, often with two peaks.",
+        minimalPairs: ["anden (the duck) vs anden (the spirit)", "tomten (the plot) vs tomten (Santa)"],
+        ttsExample: "Anden i tomten.",
+        languageVariants: {
+            sv: "Accent 1 och accent 2.",
+            en: "Changes meaning."
+        }
+    },
+    "sj sound (retroflex fricative)": {
+        description: "Unique Swedish retroflex fricative",
+        articulation: "Like 'sh' but with tongue curled back. Varies by dialect.",
+        minimalPairs: ["sjuk (sick) vs shuk", "skjorta (shirt) vs skorta", "stjärna (star) vs stjarna"],
+        ttsExample: "Sjuk skjorta på stjärna.",
+        languageVariants: {
+            sv: "Sj‑ljudet är retroflext.",
+            en: "Tongue curled back."
+        }
+    },
+    "vowel length": {
+        description: "Short vs long vowels",
+        articulation: "Swedish distinguishes short and long vowels. Long vowels are held longer and affect consonant length.",
+        minimalPairs: ["tak (roof) vs tack (thanks)", "vit (white) vs vitt (white neuter)", "mus (mouse) vs muss (mussel)"],
+        ttsExample: "Tak tack vit vitt mus muss.",
+        languageVariants: {
+            sv: "Korta och långa vokaler.",
+            en: "Vowel length changes meaning."
+        }
+    },
+
+    // Greek phonemes
+    "Greek consonants (γ/χ/ξ/ψ)": {
+        description: "Greek gamma, chi, xi, psi",
+        articulation: "Gamma (γ) is voiced velar fricative. Chi (χ) is voiceless velar fricative. Xi (ξ) = ks, Psi (ψ) = ps.",
+        minimalPairs: ["γάλα (milk) vs κάλα", "χέρι (hand) vs κέρι", "ξένος (foreigner) vs σένος"],
+        ttsExample: "Γάλα χέρι ξένος ψωμί.",
+        languageVariants: {
+            el: "Γάμμα, χι, ξι, ψι.",
+            en: "Gamma like Spanish 'g' in 'lago'."
+        }
+    },
+    "double consonants": {
+        description: "Geminate consonants",
+        articulation: "Double consonants are pronounced longer and with more tension. Distinguish meaning.",
+        minimalPairs: ["παπάς (priest) vs παππάς (priest with double p)", "νόμος (law) vs νομός (prefecture)"],
+        ttsExample: "Παπάς νόμος.",
+        languageVariants: {
+            el: "Διπλά σύμφωνα.",
+            en: "Hold consonant longer."
+        }
+    },
+    "stress marks": {
+        description: "Acute accent marks stress",
+        articulation: "Greek uses acute accent (΄) to mark stressed syllable. Stress can change meaning.",
+        minimalPairs: ["πολύ (much) vs πολύ (very)", "παπάς (priest) vs παππάς (priest with double p)"],
+        ttsExample: "Πολύ παπάς.",
+        languageVariants: {
+            el: "Τόνος.",
+            en: "Stress indicated by accent mark."
+        }
     }
+
 };
 
 /**

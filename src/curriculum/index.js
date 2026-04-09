@@ -1,12 +1,34 @@
+// src/curriculum/index.js
 /**
  * Curriculum data router for Myno AI Tutor.
  * Provides lazy‑loaded syllabus objects with IndexedDB caching and offline fallback.
  * @module curriculum
  */
 
+import { LANGUAGES } from './languages.js';
+
 const DB_NAME = 'myno-curriculum';
 const STORE_NAME = 'syllabi';
 const DB_VERSION = 1;
+
+/**
+ * Map language codes to folder names.
+ * LANGUAGES registry uses codes: 'es', 'fr', 'de', etc.
+ * Filesystem uses full names: 'spanish/', 'french/', 'german/', etc.
+ */
+const CODE_TO_FOLDER = {
+    en: 'english', es: 'spanish', fr: 'french', de: 'german',
+    it: 'italian', pt: 'portuguese', ja: 'japanese', ko: 'korean',
+    zh: 'mandarin', ar: 'arabic', hi: 'hindi', ru: 'russian',
+    nl: 'dutch', tr: 'turkish', sv: 'swedish', el: 'greek'
+};
+
+/**
+ * Vite glob registration of all syllabus modules.
+ * Matches files in pattern ./{folder}/{cefr}.js (e.g., ./spanish/A1.js)
+ * @type {Record<string, () => Promise<{ default: any }>>}
+ */
+const SYLLABUS_MODULES = import.meta.glob('./*/*.js');
 
 /**
  * Open IndexedDB database.
@@ -96,13 +118,19 @@ function validateSyllabus(syllabus) {
 }
 
 /**
- * Load a syllabus via dynamic import, with IndexedDB caching and offline fallback.
+ * Load a syllabus using Vite's import.meta.glob, with IndexedDB caching and offline fallback.
  * @param {string} lang - Language code (e.g., 'es', 'fr')
  * @param {string} cefr - CEFR level (e.g., 'A1', 'A2')
  * @returns {Promise<Object>} Syllabus object
  * @throws {Error} If syllabus fails validation and no cached version available
  */
 export async function getCurriculum(lang, cefr) {
+    // Validate language code
+    const languageExists = LANGUAGES.some(l => l.code === lang);
+    if (!languageExists) {
+        throw new Error(`Invalid language code "${lang}". Supported codes: ${LANGUAGES.map(l => l.code).join(', ')}`);
+    }
+
     // 1. Try IndexedDB cache
     const cached = await getFromIndexedDB(lang, cefr);
     if (cached) {
@@ -115,9 +143,44 @@ export async function getCurriculum(lang, cefr) {
         }
     }
 
-    // 2. Dynamic import
+    // 2. Map language code to folder name
+    const folder = CODE_TO_FOLDER[lang];
+    if (!folder) {
+        console.warn(`No folder mapping for language code "${lang}"`);
+        // Fallback to empty syllabus
+        const fallback = {
+            level: cefr,
+            language: lang,
+            grammar: [],
+            vocab: [],
+            phonemes: [],
+            pragmatics: '',
+            orthography: null
+        };
+        await storeInIndexedDB(lang, cefr, fallback);
+        return fallback;
+    }
+
+    // 3. Vite glob import
+    const modulePath = `./${folder}/${cefr}.js`;
+    if (!SYLLABUS_MODULES[modulePath]) {
+        console.warn(`Syllabus not found via glob: ${modulePath}`);
+        // Fallback to empty syllabus
+        const fallback = {
+            level: cefr,
+            language: lang,
+            grammar: [],
+            vocab: [],
+            phonemes: [],
+            pragmatics: '',
+            orthography: null
+        };
+        await storeInIndexedDB(lang, cefr, fallback);
+        return fallback;
+    }
+
     try {
-        const module = await import(`./${lang}/${cefr}.js`);
+        const module = await SYLLABUS_MODULES[modulePath]();
         const syllabus = module.default || module;
         validateSyllabus(syllabus);
         // Store in IndexedDB for future offline use
@@ -125,7 +188,7 @@ export async function getCurriculum(lang, cefr) {
         return syllabus;
     } catch (importError) {
         console.warn(`Failed to load syllabus ${lang}/${cefr}:`, importError);
-        // 3. Fallback: return empty syllabus structure
+        // 4. Fallback: return empty syllabus structure
         const fallback = {
             level: cefr,
             language: lang,
@@ -160,3 +223,5 @@ export async function clearCurriculumCache() {
         throw error;
     }
 }
+
+export { LANGUAGES };
