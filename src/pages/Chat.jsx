@@ -17,7 +17,7 @@ import { collection, query, where, getDocs, addDoc, orderBy, limit, updateDoc, d
 import { getCurriculum, clearCurriculumCache } from "@/curriculum/index.js";
 import { filterCurriculumByGoal } from "@/data/learningGoals.js";
 import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
-import { validateA1Compliance } from "@/lib/a1Simplifier";
+import { preFilterReply, gentleSimplify, enforceWordPacing, validateA1Compliance } from "@/lib/a1Simplifier";
 import { prepareResponse, expandResponse, needsExpansion } from "@/lib/textSync";
 
 const replySets = [
@@ -113,33 +113,63 @@ export default function Chat() {
   };
 
   // Parse AI response JSON with fallback to raw text
-  const parseAIResponse = (rawText) => {
+  const parseAIResponse = (rawText, currentSyllabus = null, targetLang = 'en') => {
     // Extract JSON block using regex: /\{[\s\S]*\}/
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    let reply, correction, nextQuestion;
+
     if (!jsonMatch) {
       // No JSON found, treat entire text as reply
-      return {
-        reply: rawText.trim(),
-        correction: null,
-        nextQuestion: ""
-      };
+      reply = rawText.trim();
+      correction = null;
+      nextQuestion = "";
+    } else {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        reply = parsed.reply || rawText.trim();
+        correction = parsed.correction || null;
+        nextQuestion = parsed.nextQuestion || "";
+      } catch (error) {
+        console.warn('Failed to parse AI JSON, falling back to raw text:', error);
+        reply = rawText.trim();
+        correction = null;
+        nextQuestion = "";
+      }
     }
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      // Ensure required fields
-      return {
-        reply: parsed.reply || rawText.trim(),
-        correction: parsed.correction || null,
-        nextQuestion: parsed.nextQuestion || ""
-      };
-    } catch (error) {
-      console.warn('Failed to parse AI JSON, falling back to raw text:', error);
-      return {
-        reply: rawText.trim(),
-        correction: null,
-        nextQuestion: ""
-      };
+
+    // Apply 3-step cleaning pipeline if syllabus is provided
+    if (currentSyllabus && reply) {
+      const rawReply = reply;
+
+      // Step 1: Block unexpected words not in syllabus
+      let cleanedReply = preFilterReply(rawReply, currentSyllabus, targetLang);
+
+      // Step 2: Enforce A1 complexity + TTS emoji stripping
+      cleanedReply = gentleSimplify(cleanedReply, currentSyllabus.vocab || [], targetLang);
+
+      // Step 3: Limit new vocabulary to 1 content word (English A1 only)
+      if (targetLang === 'en') {
+        cleanedReply = enforceWordPacing(cleanedReply, currentSyllabus, targetLang);
+      }
+
+      reply = cleanedReply;
+
+      // Dev-only pipeline logging
+      if (import.meta.env.DEV && currentSyllabus) {
+        console.log('[Chat Pipeline]', {
+          lang: targetLang,
+          raw: rawReply?.slice(0, 60) || 'N/A',
+          preFiltered: cleanedReply?.slice(0, 60),
+          final: reply?.slice(0, 60)
+        });
+      }
     }
+
+    return {
+      reply,
+      correction,
+      nextQuestion
+    };
   };
 
   // Detect scenario from user message
@@ -960,19 +990,14 @@ Reply with only valid JSON, no extra text.`
           currentLevel
         );
         // Continue with original flow
-        const aiParsed = parseAIResponse(responseText);
+        const targetLang = profile?.target_language || 'en';
+        const aiParsed = parseAIResponse(responseText, currentSyllabus || { vocab: [] }, targetLang);
         console.log('AI parsed:', aiParsed);
 
-        // Apply A1 complexity enforcement
-        const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
-        if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
-          console.warn('[A1] Simplified AI reply');
-        }
-
-        // Synchronize display and TTS text
-        const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+        // Synchronize display and TTS text (reply already processed by parseAIResponse pipeline)
+        const { displayText, ttsText, isTruncated } = prepareResponse(aiParsed.reply, {
           maxLength: 25,
-          targetLang: profile?.target_language || 'en',
+          targetLang: targetLang,
           showExpand: true
         });
 
@@ -1054,19 +1079,14 @@ Reply with only valid JSON, no extra text.`
             throw new Error("Invalid response format from Groq API");
           }
 
-          const aiParsed = parseAIResponse(responseText);
+          const targetLang = profile?.target_language || 'en';
+          const aiParsed = parseAIResponse(responseText, currentSyllabus || { vocab: [] }, targetLang);
           console.log('Parsed AI response:', aiParsed);
 
-          // Apply A1 complexity enforcement
-          const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
-          if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
-            console.warn('[A1] Simplified AI reply');
-          }
-
-          // Synchronize display and TTS text
-          const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+          // Synchronize display and TTS text (reply already processed by parseAIResponse pipeline)
+          const { displayText, ttsText, isTruncated } = prepareResponse(aiParsed.reply, {
             maxLength: 25,
-            targetLang: profile?.target_language || 'en',
+            targetLang: targetLang,
             showExpand: true
           });
 
@@ -1084,7 +1104,7 @@ Reply with only valid JSON, no extra text.`
               displayText,
               ttsText,
               isTruncated,
-              rawText: a1SafeReply
+              rawText: aiParsed.reply
             }
           };
           const finalMessages = [...updatedMessages, assistantMsg];
@@ -1145,19 +1165,14 @@ Reply with only valid JSON, no extra text.`
         currentLevel
       );
 
-      const aiParsed = parseAIResponse(responseText);
+      const targetLang = profile?.target_language || 'en';
+      const aiParsed = parseAIResponse(responseText, currentSyllabus || { vocab: [] }, targetLang);
       console.log('Parsed AI response:', aiParsed);
 
-      // Apply A1 complexity enforcement
-      const a1SafeReply = validateA1Compliance(aiParsed.reply, currentSyllabus || { vocab: [] });
-      if (import.meta.env.DEV && a1SafeReply !== aiParsed.reply) {
-        console.warn('[A1] Simplified AI reply');
-      }
-
-      // Synchronize display and TTS text
-      const { displayText, ttsText, isTruncated } = prepareResponse(a1SafeReply, {
+      // Synchronize display and TTS text (reply already processed by parseAIResponse pipeline)
+      const { displayText, ttsText, isTruncated } = prepareResponse(aiParsed.reply, {
         maxLength: 25,
-        targetLang: profile?.target_language || 'en',
+        targetLang: targetLang,
         showExpand: true
       });
 
@@ -1175,7 +1190,7 @@ Reply with only valid JSON, no extra text.`
           displayText,
           ttsText,
           isTruncated,
-          rawText: a1SafeReply
+          rawText: aiParsed.reply
         }
       };
       const finalMessages = [...updatedMessages, assistantMsg];

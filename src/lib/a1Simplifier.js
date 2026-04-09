@@ -388,5 +388,155 @@ export function validateA1Compliance(reply, syllabus = { vocab: [] }) {
     }
 
     // All checks passed
+    let finalReply = reply;
+
+    // Apply English‑specific grammar and word‑pacing enforcement
+    const lang = syllabus.language || 'en';
+    if (lang === 'en') {
+        finalReply = enforceQuestionGrammar(finalReply, lang);
+        finalReply = enforceWordPacing(finalReply, syllabus, lang);
+    }
+
+    return finalReply;
+}
+
+/**
+ * Enforce A1‑level English question grammar.
+ * Fixes common errors like "What are you?" → "How are you?"
+ * @param {string} reply - AI reply text
+ * @param {string} lang - Language code ('en' for English)
+ * @returns {string} Grammar‑corrected reply
+ */
+export function enforceQuestionGrammar(reply, lang) {
+    if (!reply || typeof reply !== 'string') return reply;
+    if (lang !== 'en') return reply; // Only for English
+
+    let corrected = reply;
+
+    // Fix common A1 English question errors
+    corrected = corrected.replace(/\bWhat are you\??/gi, 'How are you?');
+    corrected = corrected.replace(/\bYou are happy\? What are you\??/gi, 'Are you happy? How are you?');
+    corrected = corrected.replace(/\bWhat is your name\?/gi, 'What is your name?'); // Already correct, but ensures proper punctuation
+    corrected = corrected.replace(/\bWhere you live\?/gi, 'Where do you live?');
+    corrected = corrected.replace(/\bYou like pizza\?/gi, 'Do you like pizza?');
+    corrected = corrected.replace(/\bYou can speak English\?/gi, 'Can you speak English?');
+    corrected = corrected.replace(/\bYou have brother\?/gi, 'Do you have a brother?');
+    corrected = corrected.replace(/\bYou go school\?/gi, 'Do you go to school?');
+
+    // Ensure question starters are A1‑appropriate
+    const questionStarters = ['How', 'What', 'Where', 'Do you', 'Can you', 'Is there', 'Are there'];
+    const lines = corrected.split('\n');
+    const correctedLines = lines.map(line => {
+        if (line.trim().endsWith('?')) {
+            const firstWord = line.trim().split(' ')[0];
+            if (!questionStarters.some(starter => firstWord.toLowerCase().startsWith(starter.toLowerCase()))) {
+                // If question doesn't start with A1 starter, prepend "Do you" (most common)
+                return `Do you ${line.trim().toLowerCase()}`;
+            }
+        }
+        return line;
+    });
+
+    return correctedLines.join('\n');
+}
+
+/**
+ * Enforce strict 1‑new‑word‑per‑turn pacing for English A1.
+ * If reply introduces >1 new vocabulary word, keep only the first and replace rest with "[...]".
+ * @param {string} reply - AI reply text
+ * @param {Object} syllabus - Current syllabus with vocab array
+ * @param {string} lang - Language code
+ * @returns {string} Word‑pacing‑enforced reply
+ */
+export function enforceWordPacing(reply, syllabus, lang) {
+    if (!reply || typeof reply !== 'string') return reply;
+    if (lang !== 'en') return reply; // Only for English A1
+
+    const syllabusVocab = syllabus?.vocab || [];
+    const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
+
+    // Known vocab words (lowercase for comparison)
+    const knownVocab = new Set(syllabusVocab.map(w => safeWord(w).toLowerCase()).filter(Boolean));
+
+    // Common English function words to ALWAYS ignore (A1 learners know these)
+    const FUNCTION_WORDS = new Set([
+        'a', 'an', 'the', 'and', 'or', 'but', 'if', 'when', 'where', 'why', 'how',
+        'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+        'my', 'your', 'his', 'her', 'its', 'our', 'their',
+        'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+        'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
+        'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom', 'whose',
+        'not', 'no', 'yes', 'ok', 'okay', 'please', 'thank', 'thanks', 'sorry'
+    ]);
+
+    // Extract words from reply (preserve original case for replacement)
+    const wordMatches = [...reply.matchAll(/\b([a-z']+)\b/gi)];
+    const newWordsInReply = [];
+
+    // Identify NEW content words (not in known vocab AND not a function word)
+    for (const match of wordMatches) {
+        const word = match[1].toLowerCase();
+        const original = match[0];
+
+        // Skip if: function word, already counted, or in known vocab
+        if (FUNCTION_WORDS.has(word) || knownVocab.has(word) || newWordsInReply.some(w => w.word === word)) {
+            continue;
+        }
+
+        // Only count words with 3+ letters as "new vocabulary"
+        if (word.length >= 3) {
+            newWordsInReply.push({
+                word: original,      // Keep original case for regex
+                lower: word,         // Lowercase for comparison
+                index: match.index   // Position in string
+            });
+        }
+    }
+
+    // For English A1: if >1 new content word, keep ONLY the first, replace rest
+    if (newWordsInReply.length > 1) {
+        const wordsToReplace = newWordsInReply.slice(1).map(w => w.word);
+        // Build regex with word boundaries + negative lookahead for punctuation
+        const pattern = wordsToReplace.map(w => `\\b${w}\\b(?![a-z'])`).join('|');
+        if (pattern) {
+            return reply.replace(new RegExp(pattern, 'gi'), '[...]');
+        }
+    }
+
+    return reply;
+}
+
+// Pre-filter: block replies with words NOT in syllabus before they reach user
+export function preFilterReply(reply, syllabus, lang) {
+    if (!reply || !syllabus?.vocab) return reply;
+
+    const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
+    const allowedWords = new Set([
+        ...syllabus.vocab.map(w => safeWord(w).toLowerCase()),
+        // Always allow function words and basic A1 vocabulary
+        ...['a', 'an', 'the', 'and', 'or', 'but', 'if', 'when', 'where', 'why', 'how',
+            'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+            'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+            'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
+            'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom', 'whose',
+            'not', 'no', 'yes', 'ok', 'okay', 'please', 'thank', 'thanks', 'sorry',
+            // Basic location/directional words for A1 English
+            'here', 'there', 'where', 'everywhere', 'somewhere', 'nowhere',
+            'up', 'down', 'left', 'right', 'front', 'back', 'top', 'bottom',
+            'together', 'alone', 'with', 'without', 'good', 'bad', 'big', 'small',
+            'happy', 'sad', 'hot', 'cold', 'new', 'old', 'young']
+    ]);
+
+    // Find words in reply not in allowed set
+    const unexpected = [...reply.matchAll(/\b([a-z]{3,})\b/gi)]
+        .map(m => m[1].toLowerCase())
+        .filter(w => !allowedWords.has(w) && w.length >= 3);
+
+    // If >2 unexpected words, replace them with [...]
+    if (unexpected.length > 2) {
+        const pattern = unexpected.map(w => `\\b${w}\\b`).join('|');
+        return reply.replace(new RegExp(pattern, 'gi'), '[...]');
+    }
+
     return reply;
 }
