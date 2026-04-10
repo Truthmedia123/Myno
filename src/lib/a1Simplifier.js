@@ -223,6 +223,16 @@ export function isBeginnerFriendly(text) {
 export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     if (!text || typeof text !== 'string') return text;
 
+    // Development debug flag - can be enabled via localStorage or environment
+    const DEBUG = typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem('debug_gentleSimplify') === 'true'
+        : process.env.NODE_ENV === 'development';
+
+    // Dev-only logging for Hindi debugging
+    if (import.meta.env?.DEV && userLang === 'hi') {
+        console.log('[a1Simplifier] Hindi mode: preFilter bypassed, phoneme keys:', phonemeKeys);
+    }
+
     // Determine if syllabusVocab is a syllabus object with .vocab property
     let vocabArray = syllabusVocab;
     let syllabusPhonemes = [];
@@ -243,11 +253,32 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
         return text;
     }
 
+    // Convert descriptive phoneme strings to simple matching keys
+    const parsePhonemeKeys = (phonemes) => {
+        if (!Array.isArray(phonemes)) return [];
+        return phonemes.map(p => {
+            const lower = p.toLowerCase();
+            if (lower.includes('th')) return 'th';
+            if (lower.includes('r vs l') || lower.includes('r/l')) return ['r', 'l'];
+            if (lower.includes('retroflex')) return 'retroflex';
+            if (lower.includes('aspirated')) return 'aspirated';
+            if (lower.includes('nasal')) return 'nasal';
+            if (lower.includes('vowel')) return 'vowel';
+            // Fallback: extract first alphabetic token
+            const match = lower.match(/[a-z]+/);
+            return match ? match[0] : null;
+        }).flat().filter(Boolean);
+    };
+
+    // Parse phonemes into simple keys for matching
+    const phonemeKeys = parsePhonemeKeys(syllabusPhonemes);
+
     // Extract string from vocab object safely (handles {word:'x'} or 'x')
     const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
 
     // If text is in English, return as‑is (it's a translation/help)
     if (userLang === 'en' && isEnglish(text)) {
+        if (DEBUG) console.log('[gentleSimplify] English text detected, returning as-is:', text.substring(0, 50));
         return text;
     }
 
@@ -257,51 +288,83 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
         ...vocabArray.map(w => safeWord(w).toLowerCase()).filter(Boolean)
     ]);
 
-    // Helper: check if word contains any target phoneme
-    const containsTargetPhoneme = (word) => {
-        const lowerWord = word.toLowerCase();
-        for (const phoneme of syllabusPhonemes) {
-            const lowerPhoneme = phoneme.toLowerCase();
-            // Simple pattern matching for common phoneme descriptions
-            if (lowerPhoneme.includes('th') && lowerWord.includes('th')) return true;
-            if (lowerPhoneme.includes('r vs l') && (lowerWord.includes('r') || lowerWord.includes('l'))) return true;
-            if (lowerPhoneme.includes('r') && lowerWord.includes('r')) return true;
-            if (lowerPhoneme.includes('l') && lowerWord.includes('l')) return true;
-            if (lowerPhoneme.includes('ch') && lowerWord.includes('ch')) return true;
-            if (lowerPhoneme.includes('sh') && lowerWord.includes('sh')) return true;
-            if (lowerPhoneme.includes('ng') && lowerWord.includes('ng')) return true;
-            if (lowerPhoneme.includes('vowel') && /[aeiou]/i.test(lowerWord)) return true;
-            if (lowerPhoneme.includes('nasal') && /[aeiou]/i.test(lowerWord)) return true;
-            // Add more patterns as needed
+    if (DEBUG) {
+        console.log('[gentleSimplify] Input:', text);
+        console.log('[gentleSimplify] Syllabus phonemes:', syllabusPhonemes);
+        console.log('[gentleSimplify] Parsed phoneme keys:', phonemeKeys);
+        console.log('[gentleSimplify] Allowed words count:', allowedWords.size);
+    }
+
+    // STRICT key-based phoneme check - returns matching key or null
+    const getMatchingPhonemeKey = (word, keys) => {
+        const w = word.toLowerCase();
+        for (const key of keys) {
+            // Hindi/Devanagari specific rules
+            if (key === 'retroflex' && /[टठडढण]/.test(word)) return 'retroflex';
+            if (key === 'aspirated' && /[खघछझठढफभ]/.test(word)) return 'aspirated';
+            if (key === 'nasal' && /[ङञणनम]/.test(word) && /ं$/.test(word)) return 'nasal'; // anusvara at end
+            // Latin script rules
+            if (key === 'th' && /th/.test(w)) return 'th';
+            if (key === 'r' && /r/.test(w) && !/tr|dr|cr/.test(w)) return 'r'; // standalone r
+            if (key === 'l' && /l/.test(w) && !/cl|pl|bl/.test(w)) return 'l'; // standalone l
+            if (key === 'vowel' && /[aeiou]+/.test(w)) return 'vowel';
+            // Fallback: only match if key appears as substring in Romanized form
+            if (/[a-z]/.test(key) && w.includes(key)) return key;
         }
-        return false;
+        return null;
     };
 
     // Split into sentences using multilingual punctuation
     const sentences = text.split(SENTENCE_SPLIT_REGEX).filter(s => s.trim().length > 0);
-    const processedSentences = sentences.map(sentence => {
+    const processedSentences = sentences.map((sentence, sentenceIdx) => {
         const words = sentence.trim().split(/\s+/);
 
         // Identify complex words that are new AND contain target phonemes
         const hintIndices = [];
+        const hintKeys = []; // Store which key matched for each hint
         words.forEach((word, idx) => {
             const clean = stripPunctuation(word.toLowerCase());
             if (clean.length > 0 && !allowedWords.has(clean)) {
                 // Word is new (not in allowed vocab)
-                // Check if it contains target phonemes (if we have phonemes)
-                if (syllabusPhonemes.length === 0 || containsTargetPhoneme(clean)) {
-                    hintIndices.push(idx);
+                // Only add hint if: (a) phonemeKeys.length > 0, (b) word contains target phoneme, (c) hint count < 2 per sentence
+                if (phonemeKeys.length > 0) {
+                    const matchingKey = getMatchingPhonemeKey(clean, phonemeKeys);
+                    if (matchingKey) {
+                        // Word contains target phoneme - add hint with the key
+                        if (DEBUG) console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": New word contains target phoneme "${matchingKey}", adding hint`);
+                        hintIndices.push(idx);
+                        hintKeys[idx] = matchingKey;
+                    } else {
+                        // No phoneme match - SKIP hint
+                        if (DEBUG) {
+                            console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": New word but NO target phoneme match, skipping hint`);
+                        }
+                    }
+                } else {
+                    // No phonemes defined - SKIP hint (fallback removed)
+                    if (DEBUG) {
+                        console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": New word but no phonemes defined, skipping hint (fallback removed)`);
+                    }
                 }
+            } else if (DEBUG && clean.length > 0) {
+                console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": Already in allowed vocab, skipping`);
             }
         });
 
-        // Limit to max 2 hints per sentence
-        const hintIndicesLimited = hintIndices.slice(0, 2);
+        // Limit hints per sentence: max 1 for Hindi, max 2 for other languages
+        const maxHints = userLang === 'hi' ? 1 : 2;
+        const hintIndicesLimited = hintIndices.slice(0, maxHints);
+        if (DEBUG && hintIndices.length > maxHints) {
+            console.log(`[gentleSimplify] Sentence ${sentenceIdx}: Limited hints from ${hintIndices.length} to ${maxHints} (${userLang} mode)`);
+        }
+
         const newWords = words.map((word, idx) => {
             if (!hintIndicesLimited.includes(idx)) return word;
-            const clean = stripPunctuation(word.toLowerCase());
-            // Keep original word and add English hint in parentheses
-            return `${word} (${clean})`;
+            const matchingKey = hintKeys[idx];
+            // Keep original word and add phoneme key hint in parentheses
+            const result = `${word} (${matchingKey})`;
+            if (DEBUG) console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": Adding hint with key "${matchingKey}" -> "${result}"`);
+            return result;
         });
 
         return newWords.join(' ');
@@ -311,6 +374,12 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     if (result.length > 0 && !endsWithSentencePunctuation(result)) {
         result += '.';
     }
+
+    if (DEBUG) {
+        console.log('[gentleSimplify] Result:', result);
+        console.log('[gentleSimplify] Processing complete');
+    }
+
     return result.trim();
 }
 
@@ -490,8 +559,8 @@ export function enforceQuestionGrammar(reply, lang) {
 }
 
 /**
- * Enforce strict 1‑new‑word‑per‑turn pacing for English A1.
- * If reply introduces >1 new vocabulary word, keep only the first and replace rest with "[...]".
+ * Enforce strict 2‑new‑word‑per‑turn pacing for English A1.
+ * If reply introduces >2 new vocabulary words, keep only the first 2 and preserve the rest as-is.
  * @param {string} reply - AI reply text
  * @param {Object} syllabus - Current syllabus with vocab array
  * @param {string} lang - Language code
@@ -500,6 +569,8 @@ export function enforceQuestionGrammar(reply, lang) {
 export function enforceWordPacing(reply, syllabus, lang) {
     if (!reply || typeof reply !== 'string') return reply;
     if (lang !== 'en') return reply; // Only for English A1
+
+    const MAX_REPLACEMENTS = 2; // Hard limit for English A1 readability
 
     const syllabusVocab = syllabus?.vocab || [];
     const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
@@ -542,17 +613,41 @@ export function enforceWordPacing(reply, syllabus, lang) {
         }
     }
 
-    // For English A1: keep first 2 new words, replace the rest (capped at 3 replacements)
-    if (newWordsInReply.length > 2) {
-        // Keep first 2 new words, replace the rest
-        const wordsToReplace = newWordsInReply.slice(2).map(w => w.word);
-        // Cap replacements at 3 to avoid over-processing
-        const cappedWordsToReplace = wordsToReplace.slice(0, 3);
-        // Build regex with word boundaries + negative lookahead for punctuation
-        const pattern = cappedWordsToReplace.map(w => `\\b${w}\\b(?![a-z'])`).join('|');
-        if (pattern) {
-            return reply.replace(new RegExp(pattern, 'gi'), '[...]');
+    // If we have more than MAX_REPLACEMENTS new words, we need to replace the excess
+    if (newWordsInReply.length > MAX_REPLACEMENTS) {
+        // Keep first MAX_REPLACEMENTS new words, replace the rest with [...]
+        // But cap replacements at MAX_REPLACEMENTS (2) to avoid over-processing
+        const wordsToKeep = newWordsInReply.slice(0, MAX_REPLACEMENTS);
+        const wordsToReplace = newWordsInReply.slice(MAX_REPLACEMENTS);
+
+        // Cap replacements at MAX_REPLACEMENTS (2) - only replace first MAX_REPLACEMENTS excess words
+        const cappedWordsToReplace = wordsToReplace.slice(0, MAX_REPLACEMENTS);
+
+        // Start with the original reply
+        let result = reply;
+
+        // Process in reverse order (from end to beginning) to preserve indices
+        for (let i = cappedWordsToReplace.length - 1; i >= 0; i--) {
+            const wordInfo = cappedWordsToReplace[i];
+            const word = wordInfo.word;
+            const index = wordInfo.index;
+
+            // Find the exact position and length of the word
+            // We need to handle case-insensitive matching but preserve original case
+            const before = result.substring(0, index);
+            const after = result.substring(index);
+
+            // Check if the word at this index matches (case-insensitive)
+            const wordRegex = new RegExp(`\\b${word}\\b`, 'i');
+            const match = after.match(wordRegex);
+
+            if (match && match.index === 0) {
+                // Replace this specific occurrence with [...]
+                result = before + '[...]' + after.substring(match[0].length);
+            }
         }
+
+        return result;
     }
 
     return reply;
@@ -567,7 +662,70 @@ export function enforceWordPacing(reply, syllabus, lang) {
 export function finalCleanup(text) {
     if (!text || typeof text !== 'string') return text;
 
+    // Development debug flag - can be enabled via localStorage or environment
+    const DEBUG = typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem('debug_finalCleanup') === 'true'
+        : process.env.NODE_ENV === 'development';
+
     let cleaned = text;
+
+    if (DEBUG) {
+        console.log('[finalCleanup] Input:', text);
+    }
+
+    // Safety check: if >50% of text is Devanagari, skip Latin-focused cleanup steps
+    const devanagariCount = (cleaned.match(/[\u0900-\u097F]/g) || []).length;
+    const totalChars = cleaned.length;
+    const isMostlyDevanagari = totalChars > 0 && (devanagariCount / totalChars) > 0.5;
+
+    if (DEBUG && isMostlyDevanagari) {
+        console.log('[finalCleanup] Mostly Devanagari text detected, skipping Latin-focused cleanup');
+    }
+
+    // Fix orphaned punctuation and spacing issues from preFilterReply replacements
+    // Use Unicode-aware patterns that work with any script
+    cleaned = cleaned.replace(/^[\p{P}\p{S}\s]+/u, '').trim();
+    cleaned = cleaned.replace(/[\p{P}\p{S}\s]+$/u, '').trim();
+    // Fix double/triple punctuation from replacements (but preserve ... ellipsis)
+    cleaned = cleaned.replace(/([!?])\s*\1+/g, '$1');  // !! → !, ?? → ?
+    // Don't handle .. or ... here - let existing logic handle them
+
+    // NEW: Remove empty hint markers left by gentleSimplify
+    // Remove empty parentheses and orphaned markers
+    cleaned = cleaned.replace(/\(\s*\)/g, ''); // () → ''
+    cleaned = cleaned.replace(/\[\s*\]/g, ''); // [] → ''
+    cleaned = cleaned.replace(/\(\s*\[\.\.\.\]\s*\)/g, '[...]'); // ([...]) → [...]
+
+    // NEW: Remove phoneme hints that contain spaces or parentheses (e.g., "(th sounds)" → remove entirely)
+    // This handles legacy hints or any descriptive phoneme hints that shouldn't appear
+    // Match parentheses containing spaces: (th sounds) → remove
+    const beforeSpaceRemoval = cleaned;
+    cleaned = cleaned.replace(/\s*\([^)]*\s[^)]*\)\s*/g, ' ');
+    if (DEBUG && beforeSpaceRemoval !== cleaned) {
+        console.log('[finalCleanup] Removed phoneme hints containing spaces');
+    }
+
+    // Match parentheses containing parentheses: (th (sounds)) → remove
+    const beforeNestedRemoval = cleaned;
+    cleaned = cleaned.replace(/\s*\([^)]*\([^)]*\)[^)]*\)\s*/g, ' ');
+    if (DEBUG && beforeNestedRemoval !== cleaned) {
+        console.log('[finalCleanup] Removed phoneme hints containing nested parentheses');
+    }
+
+    // Clean up double spaces left behind
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+    // Devanagari spacing: remove spaces only within clear conjuncts, preserve spaces between words
+    // This is a conservative approach - only remove spaces when we see conjunct patterns
+    if (/[\u0900-\u097F]{3,}/.test(cleaned)) {
+        // Pattern 1: Remove spaces between consonants that are part of a conjunct
+        // Match: consonant + optional halant + space + consonant
+        cleaned = cleaned.replace(/([क-हक़-य़]्?)\s+(?=[क-हक़-य़])/gu, '$1');
+
+        // Pattern 2: But preserve spaces after clear word endings
+        // Restore spaces after vowels, anusvara, visarga
+        // This is a simplified fix - in practice, the above should handle most cases
+    }
 
     // Phase 1: Protect special patterns from being modified
     const PLACEHOLDERS = {
@@ -701,7 +859,23 @@ export function finalCleanup(text) {
 
     // Final cleanup - fix any double spaces and trim
     cleaned = cleaned.replace(/\s+/g, ' ');
-    return cleaned.trim();
+    const finalResult = cleaned.trim();
+
+    // If filtering destroyed sentence structure, fallback to simple prompt
+    const words = finalResult.split(/\s+/).filter(w => w.length > 0);
+    const blocks = (finalResult.match(/\[\.\.\.\]/g) || []).length;
+    if (words.length > 3 && blocks / words.length > 0.3) {
+        if (DEBUG) {
+            console.log('[finalCleanup] Readability guard triggered:', { words: words.length, blocks, ratio: blocks / words.length });
+        }
+        return "Let's practice simple words. Try: hello, water, yes, no.";
+    }
+
+    if (DEBUG) {
+        console.log('[finalCleanup] Result:', finalResult);
+    }
+
+    return finalResult;
 }
 
 // Pre-filter: block replies with words NOT in syllabus before they reach user
@@ -712,6 +886,17 @@ export function preFilterReply(reply, syllabus, lang) {
         return reply;
     }
 
+    // For English A1 and complex scripts (Hindi, Japanese, Korean, Chinese, Arabic),
+    // return raw reply immediately (rely on prompt constraints + pacing)
+    if (lang === 'en' || lang === 'hi' || lang === 'ja' || lang === 'ko' || lang === 'zh' || lang === 'ar') {
+        // Dev-only logging for Hindi debugging
+        if (import.meta.env?.DEV && lang === 'hi') {
+            console.log('[a1Simplifier] Hindi mode: preFilter bypassed');
+        }
+        return reply;
+    }
+
+    // Non-English: conservative filter to preserve readability
     const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
 
     // Common English function words to ALWAYS ignore (A1 learners know these)
@@ -753,8 +938,8 @@ export function preFilterReply(reply, syllabus, lang) {
         const word = match[1].toLowerCase();
         const original = match[0];
 
-        // Condition (a): ≥4 letters
-        if (word.length < 4) continue;
+        // Condition (a): ≥5 letters (more conservative)
+        if (word.length < 5) continue;
         // Condition (b): NOT in syllabus.vocab
         if (knownVocab.has(word)) continue;
         // Condition (c): NOT in FUNCTION_WORDS
@@ -766,8 +951,8 @@ export function preFilterReply(reply, syllabus, lang) {
         unexpected.push(original);
     }
 
-    // Only replace if ≥3 unexpected words found
-    if (unexpected.length >= 3) {
+    // Only replace if ≥5 unexpected words found (more conservative)
+    if (unexpected.length >= 5) {
         // Build regex with word boundaries (case-insensitive)
         const pattern = unexpected.map(w => `\\b${w}\\b`).join('|');
         return reply.replace(new RegExp(pattern, 'gi'), '[...]');
