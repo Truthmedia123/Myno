@@ -223,33 +223,82 @@ export function isBeginnerFriendly(text) {
 export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     if (!text || typeof text !== 'string') return text;
 
+    // Determine if syllabusVocab is a syllabus object with .vocab property
+    let vocabArray = syllabusVocab;
+    let syllabusPhonemes = [];
+    if (syllabusVocab && typeof syllabusVocab === 'object' && !Array.isArray(syllabusVocab)) {
+        // It's a syllabus object, extract the vocab array
+        if (syllabusVocab.vocab) {
+            vocabArray = syllabusVocab.vocab;
+        }
+        // Extract phonemes if available
+        if (Array.isArray(syllabusVocab.phonemes)) {
+            syllabusPhonemes = syllabusVocab.phonemes;
+        }
+    }
+
+    // Strict array validation
+    if (!Array.isArray(vocabArray)) {
+        console.warn('[gentleSimplify] Invalid syllabus.vocab, returning raw reply');
+        return text;
+    }
+
+    // Extract string from vocab object safely (handles {word:'x'} or 'x')
+    const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
+
     // If text is in English, return as‑is (it's a translation/help)
     if (userLang === 'en' && isEnglish(text)) {
         return text;
     }
 
     // Combine allowed vocab
-    const allowedWords = new Set([...EXPANDED_A1_VOCAB, ...syllabusVocab.map(w => w.toLowerCase())]);
+    const allowedWords = new Set([
+        ...EXPANDED_A1_VOCAB,
+        ...vocabArray.map(w => safeWord(w).toLowerCase()).filter(Boolean)
+    ]);
+
+    // Helper: check if word contains any target phoneme
+    const containsTargetPhoneme = (word) => {
+        const lowerWord = word.toLowerCase();
+        for (const phoneme of syllabusPhonemes) {
+            const lowerPhoneme = phoneme.toLowerCase();
+            // Simple pattern matching for common phoneme descriptions
+            if (lowerPhoneme.includes('th') && lowerWord.includes('th')) return true;
+            if (lowerPhoneme.includes('r vs l') && (lowerWord.includes('r') || lowerWord.includes('l'))) return true;
+            if (lowerPhoneme.includes('r') && lowerWord.includes('r')) return true;
+            if (lowerPhoneme.includes('l') && lowerWord.includes('l')) return true;
+            if (lowerPhoneme.includes('ch') && lowerWord.includes('ch')) return true;
+            if (lowerPhoneme.includes('sh') && lowerWord.includes('sh')) return true;
+            if (lowerPhoneme.includes('ng') && lowerWord.includes('ng')) return true;
+            if (lowerPhoneme.includes('vowel') && /[aeiou]/i.test(lowerWord)) return true;
+            if (lowerPhoneme.includes('nasal') && /[aeiou]/i.test(lowerWord)) return true;
+            // Add more patterns as needed
+        }
+        return false;
+    };
 
     // Split into sentences using multilingual punctuation
     const sentences = text.split(SENTENCE_SPLIT_REGEX).filter(s => s.trim().length > 0);
     const processedSentences = sentences.map(sentence => {
         const words = sentence.trim().split(/\s+/);
-        const replacements = [];
 
-        // Identify complex words
-        const complexIndices = [];
+        // Identify complex words that are new AND contain target phonemes
+        const hintIndices = [];
         words.forEach((word, idx) => {
             const clean = stripPunctuation(word.toLowerCase());
             if (clean.length > 0 && !allowedWords.has(clean)) {
-                complexIndices.push(idx);
+                // Word is new (not in allowed vocab)
+                // Check if it contains target phonemes (if we have phonemes)
+                if (syllabusPhonemes.length === 0 || containsTargetPhoneme(clean)) {
+                    hintIndices.push(idx);
+                }
             }
         });
 
-        // Limit to max 2 replacements per sentence
-        const replaceIndices = complexIndices.slice(0, 2);
+        // Limit to max 2 hints per sentence
+        const hintIndicesLimited = hintIndices.slice(0, 2);
         const newWords = words.map((word, idx) => {
-            if (!replaceIndices.includes(idx)) return word;
+            if (!hintIndicesLimited.includes(idx)) return word;
             const clean = stripPunctuation(word.toLowerCase());
             // Keep original word and add English hint in parentheses
             return `${word} (${clean})`;
@@ -493,11 +542,14 @@ export function enforceWordPacing(reply, syllabus, lang) {
         }
     }
 
-    // For English A1: if >1 new content word, keep ONLY the first, replace rest
-    if (newWordsInReply.length > 1) {
-        const wordsToReplace = newWordsInReply.slice(1).map(w => w.word);
+    // For English A1: keep first 2 new words, replace the rest (capped at 3 replacements)
+    if (newWordsInReply.length > 2) {
+        // Keep first 2 new words, replace the rest
+        const wordsToReplace = newWordsInReply.slice(2).map(w => w.word);
+        // Cap replacements at 3 to avoid over-processing
+        const cappedWordsToReplace = wordsToReplace.slice(0, 3);
         // Build regex with word boundaries + negative lookahead for punctuation
-        const pattern = wordsToReplace.map(w => `\\b${w}\\b(?![a-z'])`).join('|');
+        const pattern = cappedWordsToReplace.map(w => `\\b${w}\\b(?![a-z'])`).join('|');
         if (pattern) {
             return reply.replace(new RegExp(pattern, 'gi'), '[...]');
         }
@@ -506,34 +558,217 @@ export function enforceWordPacing(reply, syllabus, lang) {
     return reply;
 }
 
+/**
+ * Final cleanup to fix garbled output from the simplification pipeline.
+ * Removes duplicate "[...]" markers, fixes punctuation, and cleans up spacing.
+ * @param {string} text - Text to clean up
+ * @returns {string} Cleaned text
+ */
+export function finalCleanup(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    let cleaned = text;
+
+    // Phase 1: Protect special patterns from being modified
+    const PLACEHOLDERS = {
+        BRACKET_ELLIPSIS: '___BRACKET_ELLIPSIS___',
+        TRIPLE_DOT: '___TRIPLE_DOT_ELLIPSIS___'
+    };
+
+    // Protect "[...]" markers first
+    cleaned = cleaned.replace(/\[\.\.\.\]/g, PLACEHOLDERS.BRACKET_ELLIPSIS);
+
+    // Protect standalone "..." ellipsis (3+ dots not inside brackets)
+    cleaned = cleaned.replace(/\.{3,}/g, PLACEHOLDERS.TRIPLE_DOT);
+
+    // Phase 2: Basic punctuation fixes
+    // Reduce multiple punctuation marks
+    cleaned = cleaned.replace(/([!?])\1+/g, '$1');  // !! → !, ?? → ?
+    cleaned = cleaned.replace(/\.{2,}/g, '.');      // .. → .
+    cleaned = cleaned.replace(/,{2,}/g, ',');       // ,, → ,
+
+    // Fix spacing around punctuation
+    cleaned = cleaned.replace(/\s+([.,!?;:])/g, '$1');  // Remove space before punctuation
+    cleaned = cleaned.replace(/([.,!?;:])(?![ \t\n\r.,!?;:]|$)/g, '$1 ');  // Add space after if missing
+
+    // Fix multiple spaces
+    cleaned = cleaned.replace(/\s+/g, ' ');
+
+    // Phase 3: Restore protected patterns
+    cleaned = cleaned.replace(new RegExp(PLACEHOLDERS.TRIPLE_DOT, 'g'), '...');
+    cleaned = cleaned.replace(new RegExp(PLACEHOLDERS.BRACKET_ELLIPSIS, 'g'), '[...]');
+
+    // Phase 4: Post-restoration cleanup for "[...]" markers
+    // Remove duplicate "[...]" markers
+    cleaned = cleaned.replace(/\[\.\.\.\]\s*\[\.\.\.\]/g, '[...]');
+
+    // Fix spacing around "[...]" - be more careful about punctuation
+    // Don't add space if next character is punctuation
+    cleaned = cleaned.replace(/(\S)\[\.\.\.\]/g, '$1 [...]');
+    cleaned = cleaned.replace(/\[\.\.\.\](?=[a-zA-Z0-9])/g, '[...] ');
+
+    // Clean up any double spaces that may have been created
+    cleaned = cleaned.replace(/\s+\[\.\.\.\]/g, ' [...]');
+    cleaned = cleaned.replace(/\[\.\.\.\]\s+/g, '[...] ');
+
+    // Remove "[...]" at sentence beginnings
+    cleaned = cleaned.replace(/^\[\.\.\.\]\s*/, '');
+
+    // Handle "[...]" followed by punctuation - no space between
+    cleaned = cleaned.replace(/\[\.\.\.\]\s*([.,!?;:])/g, '[...]$1');
+
+    // Handle punctuation followed by "[...]" - space before
+    cleaned = cleaned.replace(/([.,!?;:])\s*\[\.\.\.\]/g, '$1 [...]');
+
+    // Phase 5: Final spacing and capitalization
+    // Remove any leading dot that might be before text
+    cleaned = cleaned.replace(/^\.\s*/, '');
+
+    // Simple capitalization: capitalize first character if it's lowercase letter
+    if (cleaned.length > 0) {
+        const firstChar = cleaned[0];
+        if (firstChar && firstChar === firstChar.toLowerCase() && /[a-z]/.test(firstChar)) {
+            cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+        }
+    }
+
+    // Handle capitalization after sentence-ending punctuation
+    // We'll use a simple regex that works for most cases
+    // First, handle cases where punctuation is directly attached to words
+    cleaned = cleaned.replace(/([a-z])([.!?])\s+([a-z])/g,
+        (match, before, punct, after) => before + punct + ' ' + after.toUpperCase());
+
+    // Handle cases where there might be [...] or ... before punctuation
+    // For simplicity, we'll just capitalize after .!? that aren't part of ellipsis
+    // This is a pragmatic approach that works for A1 level text
+    let result = '';
+    let capitalizeNext = true;
+
+    for (let i = 0; i < cleaned.length; i++) {
+        const char = cleaned[i];
+        const nextChar = i + 1 < cleaned.length ? cleaned[i + 1] : '';
+
+        // If we're at a space and next character is a letter
+        if (char === ' ' && nextChar.match(/[a-z]/) && capitalizeNext) {
+            // Check if this is after sentence-ending punctuation
+            // Look back for the last non-space character
+            let j = i - 1;
+            while (j >= 0 && cleaned[j] === ' ') j--;
+
+            if (j >= 0 && cleaned[j].match(/[.!?]/)) {
+                // Check if it's after ellipsis
+                let k = j - 1;
+                let ellipsisCount = 0;
+                while (k >= 0 && cleaned[k] === '.') {
+                    ellipsisCount++;
+                    k--;
+                }
+
+                // If we found 2+ dots before (making ...), don't capitalize
+                if (ellipsisCount >= 2) {
+                    result += char;
+                    continue;
+                }
+
+                // Check for [...] pattern
+                if (j >= 4 && cleaned.substring(j - 4, j + 1) === '[...]') {
+                    result += char;
+                    continue;
+                }
+
+                // Capitalize the next letter
+                result += ' ' + nextChar.toUpperCase();
+                i++; // Skip the lowercase letter we just capitalized
+                continue;
+            }
+        }
+
+        result += char;
+
+        // Update capitalizeNext flag
+        if (char.match(/[.!?]/)) {
+            // Check if this is a true sentence end (not part of abbreviation)
+            // Simple heuristic: if there's a space after, it's sentence end
+            if (nextChar === ' ') {
+                capitalizeNext = true;
+            }
+        } else if (char.match(/[a-zA-Z]/)) {
+            capitalizeNext = false;
+        }
+    }
+
+    cleaned = result;
+
+    // Final cleanup - fix any double spaces and trim
+    cleaned = cleaned.replace(/\s+/g, ' ');
+    return cleaned.trim();
+}
+
 // Pre-filter: block replies with words NOT in syllabus before they reach user
 export function preFilterReply(reply, syllabus, lang) {
-    if (!reply || !syllabus?.vocab) return reply;
+    if (!reply || typeof reply !== 'string') return reply;
+    if (!syllabus || !Array.isArray(syllabus.vocab)) {
+        console.warn('[preFilterReply] Invalid syllabus.vocab, skipping filter');
+        return reply;
+    }
 
     const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');
-    const allowedWords = new Set([
-        ...syllabus.vocab.map(w => safeWord(w).toLowerCase()),
-        // Always allow function words and basic A1 vocabulary
-        ...['a', 'an', 'the', 'and', 'or', 'but', 'if', 'when', 'where', 'why', 'how',
-            'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
-            'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-            'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
-            'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom', 'whose',
-            'not', 'no', 'yes', 'ok', 'okay', 'please', 'thank', 'thanks', 'sorry',
-            // Basic location/directional words for A1 English
-            'here', 'there', 'where', 'everywhere', 'somewhere', 'nowhere',
-            'up', 'down', 'left', 'right', 'front', 'back', 'top', 'bottom',
-            'together', 'alone', 'with', 'without', 'good', 'bad', 'big', 'small',
-            'happy', 'sad', 'hot', 'cold', 'new', 'old', 'young']
+
+    // Common English function words to ALWAYS ignore (A1 learners know these)
+    const FUNCTION_WORDS = new Set([
+        'a', 'an', 'the', 'and', 'or', 'but', 'if', 'when', 'where', 'why', 'how',
+        'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+        'my', 'your', 'his', 'her', 'its', 'our', 'their',
+        'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+        'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
+        'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom', 'whose',
+        'not', 'no', 'yes', 'ok', 'okay', 'please', 'thank', 'thanks', 'sorry'
     ]);
 
-    // Find words in reply not in allowed set
-    const unexpected = [...reply.matchAll(/\b([a-z]{3,})\b/gi)]
-        .map(m => m[1].toLowerCase())
-        .filter(w => !allowedWords.has(w) && w.length >= 3);
+    // Core A1 allowlist (beyond travel)
+    const A1_ALLOWLIST = new Set([
+        // Travel (existing)
+        'hello', 'hi', 'name', 'where', 'from', 'water', 'yes', 'no', 'please', 'thank',
+        'sorry', 'good', 'bad', 'help', 'friend', 'house', 'food', 'taxi', 'hotel',
+        'airport', 'ticket',
+        // Core A1 emotions/actions
+        'happy', 'sad', 'tired', 'hungry', 'thirsty', 'like', 'want', 'need', 'go', 'come',
+        'see', 'eat', 'drink', 'sleep', 'work', 'play', 'love', 'know', 'think', 'say',
+        'tell', 'ask', 'answer',
+        // Common descriptors
+        'big', 'small', 'new', 'old', 'hot', 'cold', 'fast', 'slow', 'easy', 'hard',
+        'nice', 'bad', 'right', 'wrong', 'here', 'there', 'today', 'tomorrow', 'now',
+        'later', 'again', 'also', 'only', 'very', 'really', 'just', 'then', 'so', 'but',
+        'and', 'or', 'because', 'if', 'when'
+    ]);
 
-    // If >2 unexpected words, replace them with [...]
-    if (unexpected.length > 2) {
+    // Known vocabulary from syllabus
+    const knownVocab = new Set(syllabus.vocab.map(w => safeWord(w).toLowerCase()).filter(Boolean));
+
+    // Find words in reply that are candidates for blocking
+    const wordMatches = [...reply.matchAll(/\b([a-z']+)\b/gi)];
+    const unexpected = [];
+
+    for (const match of wordMatches) {
+        const word = match[1].toLowerCase();
+        const original = match[0];
+
+        // Condition (a): ≥4 letters
+        if (word.length < 4) continue;
+        // Condition (b): NOT in syllabus.vocab
+        if (knownVocab.has(word)) continue;
+        // Condition (c): NOT in FUNCTION_WORDS
+        if (FUNCTION_WORDS.has(word)) continue;
+        // Condition (d): NOT in A1 allowlist
+        if (A1_ALLOWLIST.has(word)) continue;
+
+        // Word meets all blocking criteria
+        unexpected.push(original);
+    }
+
+    // Only replace if ≥3 unexpected words found
+    if (unexpected.length >= 3) {
+        // Build regex with word boundaries (case-insensitive)
         const pattern = unexpected.map(w => `\\b${w}\\b`).join('|');
         return reply.replace(new RegExp(pattern, 'gi'), '[...]');
     }

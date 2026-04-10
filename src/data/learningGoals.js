@@ -4,7 +4,7 @@
  * @module learningGoals
  */
 
-import { normalizeLangCode } from '@/lib/langUtils.js';
+import { normalizeLangCode, getFolderForCode } from '@/lib/langUtils.js';
 
 /**
  * @typedef {Object} CurriculumFocus
@@ -131,6 +131,7 @@ export function isSyllabusRelevant(syllabus, goal) {
 async function getCurriculum(lang, cefr) {
     // Normalize language code (e.g., "English" → "en")
     const normalizedLang = normalizeLangCode(lang);
+    const folder = getFolderForCode(normalizedLang);
     const cacheKey = `curriculum_${normalizedLang}_${cefr}`;
     // Check localStorage cache
     const cached = localStorage.getItem(cacheKey);
@@ -143,14 +144,14 @@ async function getCurriculum(lang, cefr) {
     }
     try {
         // Correct relative path from src/data to src/curriculum (one level up)
-        const module = await import(`../curriculum/${normalizedLang}/${cefr}.js`);
+        const module = await import(`../curriculum/${folder}/${cefr}.js`);
         const syllabus = module.default || module;
         // Cache in localStorage (limited to 1 day)
         localStorage.setItem(cacheKey, JSON.stringify(syllabus));
         localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
         return syllabus;
     } catch (importError) {
-        console.warn(`Failed to load curriculum for ${normalizedLang}/${cefr}:`, importError);
+        console.warn(`Failed to load curriculum for ${normalizedLang}/${cefr} (folder: ${folder}):`, importError);
         // Return a fallback empty syllabus
         return {
             grammar: [],

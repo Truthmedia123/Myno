@@ -17,7 +17,7 @@ import { collection, query, where, getDocs, addDoc, orderBy, limit, updateDoc, d
 import { getCurriculum, clearCurriculumCache } from "@/curriculum/index.js";
 import { filterCurriculumByGoal } from "@/data/learningGoals.js";
 import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
-import { preFilterReply, gentleSimplify, enforceWordPacing, validateA1Compliance } from "@/lib/a1Simplifier";
+import { preFilterReply, gentleSimplify, enforceWordPacing, validateA1Compliance, finalCleanup } from "@/lib/a1Simplifier";
 import { prepareResponse, expandResponse, needsExpansion } from "@/lib/textSync";
 
 const replySets = [
@@ -147,10 +147,13 @@ export default function Chat() {
       // Step 2: Enforce A1 complexity + TTS emoji stripping
       cleanedReply = gentleSimplify(cleanedReply, currentSyllabus.vocab || [], targetLang);
 
-      // Step 3: Limit new vocabulary to 1 content word (English A1 only)
+      // Step 3: Limit new vocabulary to 2 content words (English A1 only)
       if (targetLang === 'en') {
         cleanedReply = enforceWordPacing(cleanedReply, currentSyllabus, targetLang);
       }
+
+      // Step 4: Final cleanup to fix garbled output
+      cleanedReply = finalCleanup(cleanedReply);
 
       reply = cleanedReply;
 
@@ -1016,7 +1019,7 @@ Reply with only valid JSON, no extra text.`
             displayText,
             ttsText,
             isTruncated,
-            rawText: a1SafeReply
+            rawText: aiParsed.reply
           }
         };
         const finalMessages = [...updatedMessages, assistantMsg];
