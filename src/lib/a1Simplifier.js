@@ -232,6 +232,14 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     if (import.meta.env?.DEV && userLang === 'hi') {
         console.log('[a1Simplifier] Hindi mode: preFilter bypassed, phoneme keys:', phonemeKeys);
     }
+    // Dev-only logging for Mandarin debugging
+    if (import.meta.env?.DEV && userLang === 'zh') {
+        console.log('[a1Simplifier] Mandarin mode:', {
+            preFilter: 'bypassed',
+            pacing: userLang === 'en' ? 'active' : 'skipped',
+            cjkRatio: 0 // Will be calculated in finalCleanup
+        });
+    }
 
     // Determine if syllabusVocab is a syllabus object with .vocab property
     let vocabArray = syllabusVocab;
@@ -303,6 +311,17 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
             if (key === 'retroflex' && /[टठडढण]/.test(word)) return 'retroflex';
             if (key === 'aspirated' && /[खघछझठढफभ]/.test(word)) return 'aspirated';
             if (key === 'nasal' && /[ङञणनम]/.test(word) && /ं$/.test(word)) return 'nasal'; // anusvara at end
+            // Mandarin/CJK specific rules
+            if (key === 'tone' && /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/.test(word)) return 'tone';
+            if (key === 'retroflex' && /[zh ch sh r]/.test(w)) return 'retroflex';
+            if (key === 'palatal' && /[j q x]/.test(w)) return 'palatal';
+            if (key === 'nasal-final' && /[nɡ]$/.test(w)) return 'nasal-final';
+            // CJK character detection: skip hint injection unless Romanized form matches
+            if (/[\u4E00-\u9FFF]/.test(word)) {
+                // Only hint if pinyin/romanization contains target key
+                // For now, return null to skip hint injection for CJK characters
+                return null;
+            }
             // Latin script rules
             if (key === 'th' && /th/.test(w)) return 'th';
             if (key === 'r' && /r/.test(w) && !/tr|dr|cr/.test(w)) return 'r'; // standalone r
@@ -328,6 +347,29 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
                 // Word is new (not in allowed vocab)
                 // Only add hint if: (a) phonemeKeys.length > 0, (b) word contains target phoneme, (c) hint count < 2 per sentence
                 if (phonemeKeys.length > 0) {
+                    // For Hindi: only add hints if word contains specific target sounds
+                    if (userLang === 'hi' && syllabusPhonemes?.length > 0) {
+                        const hasTargetPhoneme = (word) => {
+                            const retroflex = /[टठडढण]/.test(word);
+                            const aspirated = /[खघछझठढफभ]/.test(word);
+                            const nasalEnd = /ं$/.test(word);
+                            return syllabusPhonemes.some(p => {
+                                const lower = p.toLowerCase();
+                                if (lower.includes('retroflex')) return retroflex;
+                                if (lower.includes('aspirated')) return aspirated;
+                                if (lower.includes('nasal')) return nasalEnd;
+                                return false;
+                            });
+                        };
+                        // Only add hint if word actually contains target phoneme
+                        if (!hasTargetPhoneme(clean)) {
+                            if (DEBUG) {
+                                console.log(`[gentleSimplify] Sentence ${sentenceIdx}, word "${word}": Hindi word lacks target phoneme, skipping hint`);
+                            }
+                            return; // Skip hint injection for this word
+                        }
+                    }
+
                     const matchingKey = getMatchingPhonemeKey(clean, phonemeKeys);
                     if (matchingKey) {
                         // Word contains target phoneme - add hint with the key
@@ -351,8 +393,8 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
             }
         });
 
-        // Limit hints per sentence: max 1 for Hindi, max 2 for other languages
-        const maxHints = userLang === 'hi' ? 1 : 2;
+        // Limit hints per sentence: max 1 for Hindi and Mandarin, max 2 for other languages
+        const maxHints = (userLang === 'hi' || userLang === 'zh') ? 1 : 2;
         const hintIndicesLimited = hintIndices.slice(0, maxHints);
         if (DEBUG && hintIndices.length > maxHints) {
             console.log(`[gentleSimplify] Sentence ${sentenceIdx}: Limited hints from ${hintIndices.length} to ${maxHints} (${userLang} mode)`);
@@ -568,7 +610,13 @@ export function enforceQuestionGrammar(reply, lang) {
  */
 export function enforceWordPacing(reply, syllabus, lang) {
     if (!reply || typeof reply !== 'string') return reply;
-    if (lang !== 'en') return reply; // Only for English A1
+    if (lang !== 'en') {
+        // Dev-only logging for Hindi debugging
+        if (import.meta.env?.DEV && lang === 'hi') {
+            console.log('[a1Simplifier] Hindi pipeline: pacing skipped (English-only)');
+        }
+        return reply; // Only for English A1
+    }
 
     const MAX_REPLACEMENTS = 2; // Hard limit for English A1 readability
 
@@ -673,9 +721,65 @@ export function finalCleanup(text) {
         console.log('[finalCleanup] Input:', text);
     }
 
-    // Safety check: if >50% of text is Devanagari, skip Latin-focused cleanup steps
-    const devanagariCount = (cleaned.match(/[\u0900-\u097F]/g) || []).length;
+    // Remove [. ] and [.] artifacts (distinct from intentional [...] blocks)
+    // These come from failed phoneme hint injections or regex mismatches
+    // Dev-only logging for CJK artifact tracking
+    if (import.meta.env?.DEV && /[\u4E00-\u9FFF]/.test(text)) {
+        const artifactMatches = (text.match(/\[\.\s*\]|\(\s*\.\s*\)/g) || []).length;
+        if (artifactMatches > 0) {
+            console.log('[finalCleanup] CJK artifacts detected before cleanup:', artifactMatches);
+        }
+    }
+
+    cleaned = cleaned.replace(/\[\.\s*\]/g, '');      // [.] or [. ] → ''
+    cleaned = cleaned.replace(/\(\s*\.\s*\)/g, '');   // (.) or (. ) → ''
+    cleaned = cleaned.replace(/\[\.\.\.\]\s*\[\.\]/g, '[...]'); // [...] [.] → [...]
+
+    // Detect if text is primarily CJK (Han + punctuation) - 30% threshold
+    const cjkCount = (cleaned.match(/[\u4E00-\u9FFF\u3000-\u303F\uFF00-\uFFEF]/g) || []).length;
     const totalChars = cleaned.length;
+    const cjkRatio = totalChars > 0 ? (cjkCount / totalChars) : 0;
+    const isPrimarilyCJK = cjkRatio > 0.3;
+
+    if (isPrimarilyCJK) {
+        // Skip Latin-focused cleanup that breaks CJK spacing/punctuation
+        if (DEBUG) {
+            console.log('[finalCleanup] Primarily CJK text detected (ratio:', cjkRatio.toFixed(2), '), skipping Latin-focused cleanup');
+        }
+        cleaned = cleaned.replace(/\(\s*\)/g, '');
+        cleaned = cleaned.replace(/\[\s*\]/g, '');
+        cleaned = cleaned.replace(/\[\.\.\.\]\s*\[\.\.\.\]/g, '[...]');
+
+        // Extra cleanup for CJK: remove any leftover single-dot markers (1 or 2 dots)
+        // First protect intentional [...] blocks
+        cleaned = cleaned.replace(/\[\.\.\.\]/g, '___TRIPLE_DOT___');
+        // Remove single and double dot markers
+        cleaned = cleaned.replace(/\[\s*\.{1,2}\s*\]/g, '');
+        // Restore intentional [...] blocks
+        cleaned = cleaned.replace(/___TRIPLE_DOT___/g, '[...]');
+
+        cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+        return cleaned;
+    }
+
+    // Detect if text is primarily Devanagari (30% threshold)
+    const devanagariCount = (cleaned.match(/[\u0900-\u097F]/g) || []).length;
+    const devanagariRatio = totalChars > 0 ? (devanagariCount / totalChars) : 0;
+    const isPrimarilyDevanagari = devanagariRatio > 0.3;
+
+    if (isPrimarilyDevanagari) {
+        // Skip Latin-focused cleanup steps that break Indic scripts
+        // Only do minimal: remove empty markers, normalize spaces
+        if (DEBUG) {
+            console.log('[finalCleanup] Primarily Devanagari text detected (ratio:', devanagariRatio.toFixed(2), '), skipping Latin-focused cleanup');
+        }
+        cleaned = cleaned.replace(/\(\s*\)/g, '');
+        cleaned = cleaned.replace(/\[\s*\]/g, '');
+        cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+        return cleaned;
+    }
+
+    // Safety check: if >50% of text is Devanagari, skip Latin-focused cleanup steps
     const isMostlyDevanagari = totalChars > 0 && (devanagariCount / totalChars) > 0.5;
 
     if (DEBUG && isMostlyDevanagari) {
