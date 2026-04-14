@@ -4,7 +4,7 @@ import { ArrowLeftIcon, PaperAirplaneIcon, MicrophoneIcon, StopIcon, SpeakerWave
 import { motion, AnimatePresence } from "framer-motion";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import { usePhonemeFeedback } from "@/hooks/usePhonemeFeedback";
-import { invokeGeminiChat } from "@/lib/gemini";
+import { mistralChatCompletion } from "@/lib/mistralClient";
 import { getChatStyle, getDrills, getSessionConfig, createVocabTracker } from "@/lib/curriculum";
 import { cn, shareContent, getShareText } from "@/lib/utils";
 import { addXP, XP_VALUES } from "@/lib/xpSystem";
@@ -114,6 +114,17 @@ export default function Chat() {
 
   // Parse AI response JSON with fallback to raw text
   const parseAIResponse = (rawText, currentSyllabus = null, targetLang = 'en') => {
+    const DEBUG_RAW_OUTPUT = false; // ← SET TO FALSE (normal pipeline with safe cleanup)
+
+    // Safe cleanup: only fix spacing/punctuation, never remove words
+    const safeCleanup = (text) => {
+      if (!text || typeof text !== 'string') return text;
+      return text
+        .replace(/\s+/g, ' ')           // collapse multiple spaces
+        .replace(/\s+([.,!?;:])/g, '$1') // fix space before punctuation
+        .trim();
+    };
+
     // Extract JSON block using regex: /\{[\s\S]*\}/
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     let reply, correction, nextQuestion;
@@ -137,32 +148,29 @@ export default function Chat() {
       }
     }
 
-    // Apply 3-step cleaning pipeline if syllabus is provided
+    // Apply safe cleanup pipeline if syllabus is provided
     if (currentSyllabus && reply) {
       const rawReply = reply;
 
-      // Step 1: Block unexpected words not in syllabus
-      let cleanedReply = preFilterReply(rawReply, currentSyllabus, targetLang);
-
-      // Step 2: Enforce A1 complexity + TTS emoji stripping
-      cleanedReply = gentleSimplify(cleanedReply, currentSyllabus.vocab || [], targetLang);
-
-      // Step 3: Limit new vocabulary to 2 content words (English A1 only)
-      if (targetLang === 'en') {
-        cleanedReply = enforceWordPacing(cleanedReply, currentSyllabus, targetLang);
+      let cleanedReply;
+      if (DEBUG_RAW_OUTPUT) {
+        cleanedReply = rawReply;
+        console.log('[DEBUG] Raw Mistral response:', rawReply);
+      } else {
+        // Apply ONLY safe cleanup, no vocabulary enforcement
+        cleanedReply = safeCleanup(rawReply);
+        // Optionally use finalCleanup if it's safe (uncomment if needed):
+        // cleanedReply = finalCleanup(rawReply);
       }
-
-      // Step 4: Final cleanup to fix garbled output
-      cleanedReply = finalCleanup(cleanedReply);
 
       reply = cleanedReply;
 
       // Dev-only pipeline logging
       if (import.meta.env.DEV && currentSyllabus) {
-        console.log('[Chat Pipeline]', {
+        console.log('[Chat Pipeline - SAFE MODE]', {
           lang: targetLang,
           raw: rawReply?.slice(0, 60) || 'N/A',
-          preFiltered: cleanedReply?.slice(0, 60),
+          cleaned: cleanedReply?.slice(0, 60),
           final: reply?.slice(0, 60)
         });
       }
@@ -218,41 +226,20 @@ export default function Chat() {
     setGeneratingLesson(true);
 
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "system",
-              content: `You are a world‑class language‑learning curriculum designer. Create a structured lesson for a ${profile?.target_language || "English"} learner (native language: ${profile?.native_language || "English"}) about the topic: "${topic}". The lesson should be appropriate for their current level (${profile?.level || "beginner"}).`
-            },
-            {
-              role: "user",
-              content: `Design a complete lesson with:
+      const systemPrompt = `You are a world‑class language‑learning curriculum designer. Create a structured lesson for a ${profile?.target_language || "English"} learner (native language: ${profile?.native_language || "English"}) about the topic: "${topic}". The lesson should be appropriate for their current level (${profile?.level || "beginner"}).`;
+
+      const userMessage = `Design a complete lesson with:
 1. A catchy title
 2. A brief introduction explaining why this topic matters for language learning
 3. 3-4 practical example sentences in ${profile?.target_language || "English"} with ${profile?.native_language || "English"} translations
 4. A practice prompt that the AI coach can use to start a conversation
 
-Return ONLY a valid JSON object with these exact keys: title, intro, examples (array of objects with target and native fields), practice_prompt.`
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800
-        })
-      });
+Return ONLY a valid JSON object with these exact keys: title, intro, examples (array of objects with target and native fields), practice_prompt.`;
 
-      if (!response.ok) {
-        throw new Error(`Groq API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
+      const content = await mistralChatCompletion(
+        [{ role: "user", content: userMessage }],
+        systemPrompt
+      );
 
       // Parse JSON from the response
       let lesson;
@@ -769,42 +756,31 @@ Return ONLY a valid JSON object with these exact keys: title, intro, examples (a
       } catch (e) { }
     }
 
-    // For ALL other languages — use Groq to get definition + example + romanization
+    // For ALL other languages — use Gemini to get definition + example + romanization
     if (!definition || targetLanguage !== "English") {
       try {
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            messages: [{
-              role: "user",
-              content: `For the ${targetLanguage} word "${word}", provide ONLY a JSON response with these fields:
+        const userMessage = `For the ${targetLanguage} word "${word}", provide ONLY a JSON response with these fields:
 {
   "translation": "meaning in ${nativeLanguage}",
   "romanization": "pronunciation in Latin letters (if non-Latin script, otherwise empty)",
   "example": "one simple example sentence in ${targetLanguage}",
   "example_translation": "translation of example in ${nativeLanguage}"
 }
-Reply with only valid JSON, no extra text.`
-            }],
-            max_tokens: 150
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const parsed = JSON.parse(data.choices[0].message.content.trim());
-          definition = parsed.translation || definition;
-          phonetic = parsed.romanization || phonetic;
-          exampleSentence = parsed.example
-            ? `${parsed.example} (${parsed.example_translation})`
-            : exampleSentence;
-        }
+Reply with only valid JSON, no extra text.`;
+
+        const content = await mistralChatCompletion(
+          [{ role: "user", content: userMessage }],
+          ""
+        );
+
+        const parsed = JSON.parse(content.trim());
+        definition = parsed.translation || definition;
+        phonetic = parsed.romanization || phonetic;
+        exampleSentence = parsed.example
+          ? `${parsed.example} (${parsed.example_translation})`
+          : exampleSentence;
       } catch (e) {
-        console.log("Groq definition fetch failed, using AI translation");
+        console.log("Gemini definition fetch failed, using AI translation");
       }
     }
 
@@ -1059,28 +1035,10 @@ Reply with only valid JSON, no extra text.`
             }))
           ];
 
-          const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: "llama-3.3-70b-versatile",
-              messages: formattedMessages,
-              max_tokens: 300
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Groq API error: ${response.status}`);
-          }
-
-          const data = await response.json();
-          const responseText = data.choices[0]?.message?.content;
-          if (!responseText) {
-            throw new Error("Invalid response format from Groq API");
-          }
+          const responseText = await mistralChatCompletion(
+            formattedMessages.filter(m => m.role !== 'system'),
+            formattedMessages.find(m => m.role === 'system')?.content || ''
+          );
 
           const targetLang = profile?.target_language || 'en';
           const aiParsed = parseAIResponse(responseText, currentSyllabus || { vocab: [] }, targetLang);

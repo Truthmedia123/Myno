@@ -7,7 +7,7 @@
 
 import { collection, addDoc, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { callGroq } from './groqClient';
+import { callMistral } from './mistralClient';
 
 // FSRS integration - using mock scheduler (fsrs package not available)
 const FSRS = null;
@@ -208,8 +208,8 @@ export async function extractAndStoreMistake(userId, userMessage, aiResponse, la
 }
 
 /**
- * Update user memory with topics extracted from conversation using Groq.
- * Language‑neutral: uses Groq to extract topics from any language.
+ * Update user memory with topics extracted from conversation using Mistral.
+ * Language‑neutral: uses Mistral to extract topics from any language.
  * @param {object} db - Firestore database instance
  * @param {string} userId - User's UID
  * @param {string} aiResponse - Latest AI response
@@ -222,8 +222,8 @@ async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession,
         // Combine recent user messages and AI response for context
         const recentText = userMessagesThisSession.slice(-3).join(' ') + ' ' + aiResponse;
 
-        // Call Groq to extract topics in a language‑neutral way
-        const topicsText = await callGroq([
+        // Call Mistral to extract topics in a language‑neutral way
+        const topicsText = await callMistral([
             {
                 role: 'system',
                 content: `You are a topic extraction assistant. Analyze the following conversation snippet and extract 3‑5 main topics or themes that the user is practicing or discussing. Return ONLY a JSON array of topic strings, no other text. Example: ["greetings", "food vocabulary", "past tense"]`
@@ -232,9 +232,16 @@ async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession,
                 role: 'user',
                 content: `Conversation snippet: ${recentText}\n\nExtract topics:`
             }
-        ], { temperature: 0.3, max_tokens: 100 });
+        ], { temperature: 0.3, maxTokens: 512 });
 
-        const topics = JSON.parse(topicsText);
+        // Handle JSON parsing with error fallback
+        let topics;
+        try {
+            topics = JSON.parse(topicsText);
+        } catch (e) {
+            console.warn('[memoryManager] AI response not valid JSON, using fallback');
+            topics = ['general conversation'];
+        }
 
         // Merge topics into userMemory document
         const memoryRef = doc(db, 'userMemory', userId);
@@ -272,7 +279,7 @@ async function updateUserMemory(db, userId, aiResponse, userMessagesThisSession,
 
 /**
  * Fallback topic detection using simple keyword matching (English‑centric).
- * Used when Groq fails.
+ * Used when Mistral fails.
  */
 async function fallbackTopicDetection(db, userId, aiResponse, targetLanguage, nativeLanguage) {
     const englishKeywords = {

@@ -1,6 +1,4 @@
-const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-const API_URL = "https://api.groq.com/openai/v1/chat/completions";
-
+import { mistralChatCompletion } from './mistralClient.js';
 import { getAgentPrompt } from "@/lib/curriculum";
 
 function extractWordsFromMessages(messages) {
@@ -21,10 +19,6 @@ function extractWordsFromMessages(messages) {
 
 export async function invokeGeminiChat(messages, targetLanguage = "English", nativeLanguage = "English", learningGoal = "General", userLevel = "beginner", memoryContext = "", personalityStyle = "", currentLevel = 1) {
   try {
-    if (!API_KEY) {
-      throw new Error("VITE_GROQ_API_KEY is not set in environment variables");
-    }
-
     const safeTargetLanguage = targetLanguage || "English";
     const safeNativeLanguage = nativeLanguage || "English";
     const safeLearningGoal = learningGoal || "General";
@@ -44,42 +38,12 @@ export async function invokeGeminiChat(messages, targetLanguage = "English", nat
     const personalityInstruction = personalityStyle ? `\n\nTUTOR PERSONALITY STYLE:\n${personalityStyle}` : "";
     const finalPrompt = `${systemPrompt}${personalityInstruction}${memoryContext}`;
 
-    const formattedMessages = [
-      { role: "system", content: finalPrompt },
-      ...(messages || []).map(m => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m?.content || "")
-      }))
-    ];
-
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: formattedMessages,
-        max_tokens: 300
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Groq API error: ${err}`);
-    }
-
-    const data = await response.json();
-
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error("Invalid response format from Groq API");
-    }
-
-    return data.choices[0].message.content;
+    // Use the Mistral client
+    const response = await mistralChatCompletion(messages, finalPrompt);
+    return response;
 
   } catch (error) {
-    console.error("Groq API Error:", error.message);
+    console.error("Mistral API Error:", error.message);
     throw error;
   }
 }
