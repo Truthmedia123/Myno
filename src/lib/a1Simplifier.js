@@ -468,9 +468,9 @@ export function validateA1Teaching(reply, syllabus) {
     if (isTeaching) {
         // Still ensure it's not overly complex
         const words = reply.split(/\s+/).filter(w => w.length > 0);
-        if (words.length > 15) {
+        if (words.length > 25) {
             // Trim length but keep teaching intent
-            const trimmed = words.slice(0, 12).join(' ') + '...';
+            const trimmed = words.slice(0, 20).join(' ') + '...';
             return { isTeaching: true, simplifiedReply: trimmed };
         }
         return { isTeaching: true, simplifiedReply: reply };
@@ -618,7 +618,7 @@ export function enforceWordPacing(reply, syllabus, lang) {
         return reply; // Only for English A1
     }
 
-    const MAX_REPLACEMENTS = 2; // Hard limit for English A1 readability
+    const MAX_REPLACEMENTS = 4; // Hard limit for English A1 readability
 
     const syllabusVocab = syllabus?.vocab || [];
     const safeWord = (w) => typeof w === 'string' ? w : (w.word || '');

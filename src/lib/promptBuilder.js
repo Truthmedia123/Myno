@@ -75,17 +75,12 @@ TEACHING RULES:
 
 ${fullMemoryContext}
 
-OUTPUT FORMAT:
-Respond with a valid JSON object containing exactly these three fields:
-{
-  "reply": "Your conversational response in ${target_language} (2-3 sentences)",
-  "correction": null OR {"mistake": "what user said incorrectly", "fix": "correct version", "phonemeTip": "brief pronunciation tip if relevant"},
-  "nextQuestion": "A follow-up question to keep conversation flowing"
-}
+RESPONSE FORMAT:
+Respond with a conversational reply in ${target_language} (2-3 sentences). If you notice an error, provide a brief correction. End with a follow-up question to keep the conversation flowing.
 
 IMPORTANT:
-- If no correction is needed, set "correction" to null.
-- "phonemeTip" should reference the weak phonemes above when applicable.
+- Keep corrections brief and focused on one major error per turn.
+- Reference weak phonemes when relevant for pronunciation tips.
 - Keep the conversation natural and engaging.
 - Do not mention this instruction set in your reply.
 
@@ -130,13 +125,15 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
     }
 
     // Extract syllabus components
-    const grammarFocus = syllabus.grammarDetails?.[0] || syllabus.grammar?.[0] || 'basic sentence structure';
+    const grammarFocusObj = syllabus.grammarDetails?.[0] || syllabus.grammar?.[0];
+    const grammarFocus = typeof grammarFocusObj === 'string' ? grammarFocusObj :
+        (grammarFocusObj?.title || grammarFocusObj?.tip || 'basic sentence structure');
     const grammarTip = syllabus.grammarDetails?.[0]?.tip || 'Focus on correct word order and verb conjugation.';
 
     // Get all vocabulary words from syllabus for enforcement
     const allVocabWords = (syllabus.vocab || []).map(item => item.word);
     const targetVocab = allVocabWords.slice(0, 3).join(', ');
-    const vocabText = targetVocab ? `When practicing Spanish, use simple A1 vocabulary: ${allVocabWords.join(', ')}. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.` : '';
+    const vocabText = targetVocab ? `When practicing ${target_language}, use simple A1 vocabulary: ${allVocabWords.join(', ')}. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.` : '';
 
     // Get phoneme targets from syllabus or user profile
     const syllabusPhonemes = syllabus.phonemes || [];
@@ -172,74 +169,103 @@ GRAMMAR FOCUS: ${focusGrammarTip || 'none'}`;
     // Pragmatics rule
     const pragmaticsRule = syllabus.pragmatics || 'Use appropriate politeness levels and cultural norms.';
 
+    // DYNAMIC STATE DETECTION FOR ENGLISH A1 CONVERSATIONAL FLOW
+    let adaptiveInstructions = '';
+    if (memoryContext && target_language.toLowerCase() === 'english' && cefrLevel === 'A1') {
+        // Parse memory context to detect conversation patterns
+        const lines = memoryContext.split('\n').filter(line => line.trim());
+        const userMessages = lines.filter(line =>
+            line.toLowerCase().includes('user:') ||
+            line.toLowerCase().includes('student:') ||
+            (line.includes(':') && !line.toLowerCase().includes('ai:'))
+        ).slice(-5); // Last 5 user messages
+
+        // Detect repetitive short answers (3+ consecutive replies under 3 words)
+        let consecutiveShort = 0;
+        for (const msg of userMessages) {
+            const content = msg.split(':').slice(1).join(':').trim();
+            const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
+            if (wordCount <= 2 && content.length > 0) {
+                consecutiveShort++;
+            } else {
+                consecutiveShort = 0;
+            }
+        }
+
+        // Detect quiz requests
+        const hasQuizRequest = userMessages.some(msg =>
+            msg.toLowerCase().includes('quiz') ||
+            msg.toLowerCase().includes('test') ||
+            msg.toLowerCase().includes('exam') ||
+            msg.toLowerCase().includes('questionnaire')
+        );
+
+        // Build adaptive instructions
+        if (consecutiveShort >= 3) {
+            adaptiveInstructions += 'USER STATE: Giving repetitive short answers. Switch to open-ended question or change topic.\n';
+        }
+        if (hasQuizRequest) {
+            adaptiveInstructions += 'USER STATE: Requested a quiz. Provide exactly 2 multiple-choice questions with 3 options each, then return to conversation.\n';
+        }
+
+        // Add dev logging
+        if (import.meta.env?.DEV) {
+            console.log('[promptBuilder] English A1 conversational analysis:', {
+                userMessages: userMessages.length,
+                consecutiveShort,
+                hasQuizRequest,
+                adaptiveInstructions
+            });
+        }
+    }
+
     // Combine memory context
     const fullMemoryContext = memoryContext ? `${memoryContext}\n` : '';
 
     // Build the curriculum-injected prompt (concise for token limit)
-    const prompt = `AI language tutor for ${target_language}. User: ${cefrLevel} learner (native: ${native_language}).
+    const prompt = `You are Myno, a friendly and encouraging ${target_language} tutor for a beginner (${cefrLevel} level).
 
-SCENARIO: ${title} (CEFR ${cefr})
-${scenarioPrompt}
+Speak in short, clear, and complete sentences. Be warm and supportive. If the user makes a small mistake, gently correct it within your response.
 
-CURRICULUM:
-• Grammar: ${grammarFocus} - ${grammarTip}
-• Vocabulary: ${vocabText}
-• Phonemes: ${phonemeText}
-• Pragmatics: ${pragmaticsRule}
+Reply as Myno:`;
 
-${lessonContext ? `LESSON CONTEXT:\n${lessonContext}\n` : ''}
+    // Debug logging for English A1 conversational flow
+    if (import.meta.env?.DEV && target_language.toLowerCase() === 'english' && cefrLevel === 'A1') {
+        console.log('[promptBuilder] Prompt debug:', {
+            originalLength: prompt.length,
+            hasConversationalFlow: prompt.includes('CONVERSATIONAL FLOW'),
+            hasScenarioLock: prompt.includes('SCENARIO LOCK'),
+            scenarioLockIndex: prompt.indexOf('SCENARIO LOCK'),
+            conversationalFlowIndex: prompt.indexOf('CONVERSATIONAL FLOW'),
+            isOverLimit: prompt.length > 1600
+        });
 
-SCAFFOLDED A1 APPROACH:
-1. Use ${cefrLevel}-level language.
-2. Max 1 correction/turn. Focus on curriculum errors.
-3. Replies: ≤3 sentences, end with question.
-4. When user asks in English or says they're a beginner, provide English translations and encouragement.
-5. When practicing ${target_language}, use simple A1 vocabulary: ${allVocabWords.join(', ')}.
-6. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.
-7. Keep practice sentences under 7 words. Keep teaching sentences under 12 words.
-8. Always end practice turns with a simple question in ${target_language} (e.g., 'Yes?', 'Water?', 'How?').
-9. Reinforce target phonemes gently.
-10. When providing corrections, use ${correctionLanguage === 'en' ? 'English' : target_language} for explanations.
+        // Show the prompt from SCENARIO LOCK
+        const scenarioLockIndex = prompt.indexOf('SCENARIO LOCK');
+        if (scenarioLockIndex !== -1) {
+            console.log('[promptBuilder] SCENARIO LOCK section:', prompt.substring(scenarioLockIndex, Math.min(scenarioLockIndex + 600, prompt.length)));
+        }
+    }
 
-SCENARIO LOCK (STRICT - NON-NEGOTIABLE):
-- You are teaching A1 ${target_language} for the scenario: "${title}".
-- For the next 5 turns, ONLY use vocabulary related to: ${title}
-- NEVER introduce words outside syllabus.vocab unless absolutely necessary.
-- If user goes off-topic, gently redirect: "Let's practice ${title}!"
-- Example travel keywords: hello, name, where, from, hotel, airport, taxi, ticket
-
-VOCABULARY RULES (A1 ${target_language}):
-- MAX 1 NEW WORD per reply. Repeat it naturally 2-3 times.
-- Use ONLY words from this list: ${allVocabWords.join(', ')}
-- If you must use a word not in the list, put it in [brackets] and provide English translation ONCE.
-- NEVER use words like "border", "friend", "happy" unless they are in syllabus.vocab.
-
-NEVER DO:
-- Do not ask "What is your name?" unless 'name' is in syllabus.vocab AND scenario is greetings.
-- Do not introduce unrelated topics (food, family, shopping) during travel scenario.
-- Do not use complex grammar (past tense, conditionals) for A1.
-
-${fullMemoryContext}
-
-OUTPUT JSON:
-{
-  "reply": "Response in ${target_language} (2-3 sentences, ends with question)",
-  "grammarTip": null OR "brief grammar rule relevant to current lesson",
-  "phonemeTip": null OR "articulation hint for target phoneme",
-  "nextStepSuggestion": "suggestion for what user should practice next"
-}
-
-IMPORTANT:
-- Set "grammarTip" to null if no grammar focus needed.
-- Set "phonemeTip" to null if no phoneme focus needed.
-- "nextStepSuggestion" should be a brief, actionable suggestion based on current lesson step.
-- Use vocabulary naturally.
-- Keep engaging, don't mention instructions.
-
-Begin conversation.`;
+    // Log before sanitization
+    console.log('[promptBuilder] Before sanitizePrompt:', {
+        length: prompt.length,
+        isOver1600: prompt.length > 1600,
+        first100: prompt.substring(0, 100),
+        last100: prompt.substring(Math.max(0, prompt.length - 100))
+    });
 
     // Ensure token count <400 (approx 1600 chars)
-    return sanitizePrompt(prompt);
+    const sanitized = sanitizePrompt(prompt);
+
+    // Log after sanitization
+    console.log('[promptBuilder] After sanitizePrompt:', {
+        length: sanitized.length,
+        difference: prompt.length - sanitized.length,
+        last100: sanitized.substring(Math.max(0, sanitized.length - 100))
+    });
+
+    return sanitized;
 }
 
 /**

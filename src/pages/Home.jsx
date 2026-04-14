@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FireIcon, BookOpenIcon, SparklesIcon, TrophyIcon as CrownIcon, ChartBarIcon, FlagIcon } from "@heroicons/react/24/outline";
+import { FireIcon, BookOpenIcon, SparklesIcon, TrophyIcon, TrophyIcon as CrownIcon, ChartBarIcon, FlagIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
