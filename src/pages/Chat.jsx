@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeftIcon, PaperAirplaneIcon, MicrophoneIcon, StopIcon, SpeakerWaveIcon, ArrowPathIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, PaperAirplaneIcon, MicrophoneIcon, StopIcon, SpeakerWaveIcon, ArrowPathIcon, SparklesIcon, BookmarkIcon, BookOpenIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import { usePhonemeFeedback } from "@/hooks/usePhonemeFeedback";
 import { mistralChatCompletion } from "@/lib/mistralClient";
 import { getChatStyle, getDrills, getSessionConfig, createVocabTracker } from "@/lib/curriculum";
+import { invokeGeminiChat } from "@/lib/gemini";
 import { cn, shareContent, getShareText } from "@/lib/utils";
 import { addXP, XP_VALUES } from "@/lib/xpSystem";
 import { updateDailyStreak } from "@/lib/streakManager";
@@ -19,6 +20,10 @@ import { filterCurriculumByGoal } from "@/data/learningGoals.js";
 import { buildCurriculumPrompt } from "@/lib/promptBuilder.js";
 import { preFilterReply, gentleSimplify, enforceWordPacing, validateA1Compliance, finalCleanup } from "@/lib/a1Simplifier";
 import { prepareResponse, expandResponse, needsExpansion } from "@/lib/textSync";
+import { addWord, wordExists } from "@/lib/vocabStore";
+import { getTranslation } from "@/lib/translationCache";
+import { updateMemory, detectTopic, getMemory } from "@/lib/conversationMemory.js";
+import { lookupWord } from "@/lib/dictionaryService";
 
 const replySets = [
   ["Tell me more", "Give me an example", "Too hard, simplify"],
@@ -34,6 +39,12 @@ const LEVEL_NAMES = {
   4: "Verbs",
   5: "Short Phrases",
   6: "Full Sentences"
+};
+
+const CEFR_LEVELS = {
+  'beginner': 'Beginner (A1)',
+  'some': 'Elementary (A2)',
+  'intermediate': 'Intermediate (B1)'
 };
 
 export default function Chat() {
@@ -56,6 +67,7 @@ export default function Chat() {
   const [showSummary, setShowSummary] = useState(false);
   const [showScenarios, setShowScenarios] = useState(true);
   const [streakToast, setStreakToast] = useState(null);
+  const [savedToast, setSavedToast] = useState(null);
   const [vocabReviewWords, setVocabReviewWords] = useState([]);
   const [recentMistakes, setRecentMistakes] = useState([]);
   const [showDailyLesson, setShowDailyLesson] = useState(false);
@@ -66,6 +78,8 @@ export default function Chat() {
   const [drillResults, setDrillResults] = useState([]);
   const [drillIndex, setDrillIndex] = useState(0);
   const [expandedMessageIndices, setExpandedMessageIndices] = useState({});
+  const [grammarExplanations, setGrammarExplanations] = useState({}); // message index -> explanation text
+  const [dictionaryDefinitions, setDictionaryDefinitions] = useState({}); // message index -> definition text
   const [showLessonInput, setShowLessonInput] = useState(false);
   const [lessonTopic, setLessonTopic] = useState("");
   const [generatingLesson, setGeneratingLesson] = useState(false);
@@ -710,6 +724,14 @@ Return ONLY a valid JSON object with these exact keys: title, intro, examples (a
     }
   };
 
+  const extractFirstWord = (text) => {
+    if (!text) return '';
+    // Remove punctuation, split by whitespace, take first token
+    const cleaned = text.replace(/[.,!?;:()\[\]{}"']/g, '');
+    const tokens = cleaned.trim().split(/\s+/);
+    return tokens[0] || '';
+  };
+
   const extractAndSaveWord = async (aiText, targetLanguage, nativeLanguage) => {
     const match = aiText.match(/📚 Word to remember:\s*([^\n\r]+)/i);
     if (!match) return;
@@ -810,6 +832,174 @@ Reply with only valid JSON, no extra text.`;
     if (profile?.id) {
       await dbActions.updateUserProfile(profile.id, { words_mastered: (profile.words_mastered || 0) + 1 });
       setProfile((p) => ({ ...p, words_mastered: (p?.words_mastered || 0) + 1 }));
+    }
+  };
+
+  const handleSaveWord = async (word, context = '') => {
+    if (!word || !word.trim()) return;
+
+    const trimmedWord = word.trim();
+    const targetLanguage = profile?.target_language || 'English';
+    const nativeLanguage = profile?.native_language || 'English';
+
+    try {
+      // Check if word already exists
+      const exists = await wordExists(trimmedWord, targetLanguage);
+      if (exists) {
+        setSavedToast({
+          type: 'info',
+          message: `"${trimmedWord}" is already in your vocabulary`,
+          word: trimmedWord
+        });
+        setTimeout(() => setSavedToast(null), 3000);
+        return;
+      }
+
+      // Show translation progress toast
+      setSavedToast({
+        type: 'info',
+        message: `Translating "${trimmedWord}"...`,
+        word: trimmedWord
+      });
+
+      // Get translation from Mistral API
+      const translation = await getTranslation(trimmedWord, targetLanguage, nativeLanguage);
+
+      // Add to vocabulary store
+      await addWord({
+        word: trimmedWord,
+        translation: translation || '',
+        language: targetLanguage,
+        context: context || `Saved from chat`,
+        status: 'new',
+        createdAt: new Date(),
+        nextReviewAt: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
+        reviewCount: 0
+      });
+
+      // Show success toast with translation if available
+      const toastMessage = translation
+        ? `"${trimmedWord}" saved (${translation})`
+        : `"${trimmedWord}" saved to vocabulary`;
+
+      setSavedToast({
+        type: 'success',
+        message: toastMessage,
+        word: trimmedWord,
+        translation: translation || null
+      });
+
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => setSavedToast(null), 3000);
+
+      // Award XP for saving a word
+      addXP(db, auth.currentUser?.uid, XP_VALUES.WORD_SAVED, "word saved");
+      setXpPopup(XP_VALUES.WORD_SAVED);
+      setTimeout(() => setXpPopup(null), 2000);
+
+      // Track session stats
+      setSessionWords(prev => prev + 1);
+      setSessionXP(prev => prev + XP_VALUES.WORD_SAVED);
+
+      console.log('✅ Word saved to vocabulary:', trimmedWord, 'Translation:', translation);
+
+    } catch (error) {
+      console.error('Error saving word to vocabulary:', error);
+      setSavedToast({
+        type: 'error',
+        message: `Failed to save "${trimmedWord}"`,
+        word: trimmedWord
+      });
+      setTimeout(() => setSavedToast(null), 3000);
+    }
+  };
+
+  const generateGrammarExplanation = async (messageText, messageIndex) => {
+    if (!messageText || !profile) return;
+
+    try {
+      // Show loading state
+      setGrammarExplanations(prev => ({
+        ...prev,
+        [messageIndex]: "Generating grammar explanation..."
+      }));
+
+      const targetLanguage = profile.target_language || "English";
+      const nativeLanguage = profile.native_language || "English";
+
+      // Prepare prompt for grammar explanation
+      const systemPrompt = `You are a language tutor explaining grammar to a ${profile.cefr_level || 'A1'} level learner.
+Explain the grammar in the given sentence in simple terms, focusing on:
+1. Sentence structure
+2. Key grammar points (tenses, articles, prepositions, word order)
+3. Common mistakes learners make
+4. How to use similar patterns in other sentences
+
+Keep the explanation concise (3-4 sentences) and use simple language. Explain in ${nativeLanguage}.`;
+
+      const userPrompt = `Explain the grammar in this ${targetLanguage} sentence: "${messageText}"`;
+
+      const response = await mistralChatCompletion(
+        [{ role: "user", content: userPrompt }],
+        systemPrompt,
+        { maxTokens: 300, temperature: 0.7 }
+      );
+
+      // Update grammar explanations state
+      setGrammarExplanations(prev => ({
+        ...prev,
+        [messageIndex]: response
+      }));
+
+      // Award XP for grammar explanation
+      addXP(db, auth.currentUser?.uid, XP_VALUES.GRAMMAR_EXPLANATION, "grammar explanation");
+      setXpPopup(XP_VALUES.GRAMMAR_EXPLANATION);
+      setTimeout(() => setXpPopup(null), 2000);
+
+      console.log('✅ Grammar explanation generated for message', messageIndex);
+    } catch (error) {
+      console.error('Error generating grammar explanation:', error);
+      setGrammarExplanations(prev => ({
+        ...prev,
+        [messageIndex]: "Failed to generate grammar explanation. Please try again."
+      }));
+    }
+  };
+
+  const lookupDictionaryWord = async (word, messageIndex) => {
+    if (!word || !profile) return;
+
+    try {
+      // Show loading state
+      setDictionaryDefinitions(prev => ({
+        ...prev,
+        [messageIndex]: "Looking up definition..."
+      }));
+
+      const targetLanguage = profile.target_language || "English";
+      const nativeLanguage = profile.native_language || "English";
+
+      // Use the dictionary service to look up the word
+      const definition = await lookupWord(word, targetLanguage);
+
+      // Update dictionary definitions state
+      setDictionaryDefinitions(prev => ({
+        ...prev,
+        [messageIndex]: definition || "No definition found for this word."
+      }));
+
+      // Award XP for dictionary lookup
+      addXP(db, auth.currentUser?.uid, XP_VALUES.DICTIONARY_LOOKUP, "dictionary lookup");
+      setXpPopup(XP_VALUES.DICTIONARY_LOOKUP);
+      setTimeout(() => setXpPopup(null), 2000);
+
+      console.log('✅ Dictionary definition retrieved for word', word);
+    } catch (error) {
+      console.error('Error looking up word in dictionary:', error);
+      setDictionaryDefinitions(prev => ({
+        ...prev,
+        [messageIndex]: "Failed to look up word. Please try again."
+      }));
     }
   };
 
@@ -929,10 +1119,21 @@ Reply with only valid JSON, no extra text.`;
         if (currentSyllabus && !curriculumLoading) {
           // Detect scenario from user message
           const detectedScenario = detectScenarioFromMessage(msg);
+          // Map user_level to CEFR level for prompt builder
+          const levelMap = {
+            'beginner': 'A1',
+            'some': 'A2',
+            'intermediate': 'B1'
+          };
+          const cefrLevel = levelMap[profile?.user_level] || 'A1';
+          const enhancedProfile = {
+            ...profile,
+            cefrLevel
+          };
           // Use curriculum‑injected prompt
           systemPrompt = buildCurriculumPrompt(
             detectedScenario, // pass scenario object if detected, otherwise null
-            profile,
+            enhancedProfile,
             currentSyllabus,
             memoryContext,
             correctionLanguage
@@ -1107,6 +1308,26 @@ Reply with only valid JSON, no extra text.`;
               profile.native_language
             ).catch(e => console.error("Update user memory error:", e));
           }
+
+          // Update conversation memory for long-term context
+          if (userId) {
+            try {
+              const memory = await getMemory(userId);
+              const topic = detectTopic(msg);
+              const lastTopic = memory.lastTopics?.[0];
+              const isSameTopic = lastTopic === topic;
+
+              const updates = {
+                lastTopics: [topic, ...(memory.lastTopics || []).slice(0, 4)],
+                topics: [...new Set([...(memory.topics || []), topic])].slice(-10),
+                turnsOnCurrentTopic: isSameTopic ? (memory.turnsOnCurrentTopic || 0) + 1 : 1,
+                consecutiveShortReplies: msg.length < 10 ? (memory.consecutiveShortReplies || 0) + 1 : 0
+              };
+              await updateMemory(userId, updates);
+            } catch (e) {
+              console.error('Conversation memory update error:', e);
+            }
+          }
           return; // Successfully handled curriculum prompt
         } catch (apiError) {
           console.error('Curriculum prompt API call failed:', apiError);
@@ -1186,6 +1407,26 @@ Reply with only valid JSON, no extra text.`;
           profile.target_language,
           profile.native_language
         ).catch(e => console.error("Update user memory error:", e));
+      }
+
+      // Update conversation memory for long-term context
+      if (userId) {
+        try {
+          const memory = await getMemory(userId);
+          const topic = detectTopic(msg);
+          const lastTopic = memory.lastTopics?.[0];
+          const isSameTopic = lastTopic === topic;
+
+          const updates = {
+            lastTopics: [topic, ...(memory.lastTopics || []).slice(0, 4)],
+            topics: [...new Set([...(memory.topics || []), topic])].slice(-10),
+            turnsOnCurrentTopic: isSameTopic ? (memory.turnsOnCurrentTopic || 0) + 1 : 1,
+            consecutiveShortReplies: msg.length < 10 ? (memory.consecutiveShortReplies || 0) + 1 : 0
+          };
+          await updateMemory(userId, updates);
+        } catch (e) {
+          console.error('Conversation memory update error:', e);
+        }
       }
     } catch (e) {
       console.error("sendMessage fatal error:", e);
@@ -1289,7 +1530,7 @@ Reply with only valid JSON, no extra text.`;
           <div className="flex-1 min-w-0">
             <p className="text-sm font-extrabold text-foreground leading-none truncate">Myno Coach</p>
             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-              {isListening ? "🎙 Listening..." : isSpeaking ? "🔊 Speaking..." : `${profile?.target_language || "English"} • Level ${currentLevel}`}
+              {isListening ? "🎙 Listening..." : isSpeaking ? "🔊 Speaking..." : `${profile?.target_language || "English"} • ${CEFR_LEVELS[profile?.user_level] || 'Beginner (A1)'}`}
             </p>
           </div>
         </div>
@@ -1400,6 +1641,16 @@ Reply with only valid JSON, no extra text.`;
       {streakToast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-orange-500 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
           🔥 {streakToast} day streak! Keep it going!
+        </div>
+      )}
+
+      {/* Vocabulary saved toast */}
+      {savedToast && (
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 ${savedToast.type === 'success' ? 'bg-green-500' : savedToast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'} text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce`}>
+          {savedToast.type === 'success' && '✅ '}
+          {savedToast.type === 'error' && '❌ '}
+          {savedToast.type === 'info' && 'ℹ️ '}
+          {savedToast.message}
         </div>
       )}
 
@@ -1869,40 +2120,139 @@ Reply with only valid JSON, no extra text.`;
                       {expandedMessageIndices[i] ? msg.textSync?.rawText || msg.content : msg.content}
                     </p>
                     {msg.role === "assistant" && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={() => {
-                            const textToSpeak = expandedMessageIndices[i]
-                              ? expandResponse(msg.textSync?.rawText || msg.content)
-                              : (msg.textSync?.ttsText || msg.content);
-                            speak(textToSpeak);
-                          }}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          <SpeakerWaveIcon className="w-3 h-3" />
-                          {expandedMessageIndices[i] ? 'Play full' : 'Play'}
-                        </button>
-                        {msg.textSync?.isTruncated && (
+                      <>
+                        <div className="flex items-center gap-2 mt-2">
                           <button
                             onClick={() => {
-                              const isExpanded = expandedMessageIndices[i];
-                              // Toggle expansion
-                              setExpandedMessageIndices(prev => ({
-                                ...prev,
-                                [i]: !isExpanded
-                              }));
-                              // If expanding, speak the full text
-                              if (!isExpanded) {
-                                const expandedText = expandResponse(msg.textSync.rawText);
-                                speak(expandedText);
+                              const textToSpeak = expandedMessageIndices[i]
+                                ? expandResponse(msg.textSync?.rawText || msg.content)
+                                : (msg.textSync?.ttsText || msg.content);
+                              speak(textToSpeak);
+                            }}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            <SpeakerWaveIcon className="w-3 h-3" />
+                            {expandedMessageIndices[i] ? 'Play full' : 'Play'}
+                          </button>
+                          {/* Save to vocabulary button */}
+                          <button
+                            onClick={() => {
+                              const messageText = expandedMessageIndices[i]
+                                ? expandResponse(msg.textSync?.rawText || msg.content)
+                                : msg.content;
+                              const word = extractFirstWord(messageText);
+                              if (word && word.length > 1) {
+                                handleSaveWord(word, `From chat: ${messageText.substring(0, 50)}...`);
+                              } else {
+                                // If no word extracted, use first 10 chars as fallback
+                                handleSaveWord(messageText.substring(0, 20).trim(), `From chat: ${messageText.substring(0, 50)}...`);
                               }
                             }}
-                            className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                            className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 transition-colors"
+                            title="Save to vocabulary"
                           >
-                            <span>{expandedMessageIndices[i] ? 'Show less' : 'Show more'}</span>
+                            <BookmarkIcon className="w-3 h-3" />
+                            Save word
                           </button>
+                          {/* Grammar explanation button */}
+                          <button
+                            onClick={() => {
+                              const messageText = expandedMessageIndices[i]
+                                ? expandResponse(msg.textSync?.rawText || msg.content)
+                                : msg.content;
+                              generateGrammarExplanation(messageText, i);
+                            }}
+                            className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition-colors"
+                            title="Explain grammar"
+                            disabled={grammarExplanations[i] && grammarExplanations[i] !== "Generating grammar explanation..."}
+                          >
+                            <SparklesIcon className="w-3 h-3" />
+                            {grammarExplanations[i] && grammarExplanations[i] !== "Generating grammar explanation..." ? 'Explained' : 'Explain grammar'}
+                          </button>
+                          {/* Dictionary lookup button */}
+                          <button
+                            onClick={() => {
+                              const messageText = expandedMessageIndices[i]
+                                ? expandResponse(msg.textSync?.rawText || msg.content)
+                                : msg.content;
+                              const word = extractFirstWord(messageText);
+                              if (word && word.length > 1) {
+                                lookupDictionaryWord(word, i);
+                              } else {
+                                // If no word extracted, use first 10 chars as fallback
+                                lookupDictionaryWord(messageText.substring(0, 20).trim(), i);
+                              }
+                            }}
+                            className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors"
+                            title="Look up word in dictionary"
+                            disabled={!!dictionaryDefinitions[i] && (Array.isArray(dictionaryDefinitions[i]) || dictionaryDefinitions[i] === "Looking up definition...")}
+                          >
+                            <BookOpenIcon className="w-3 h-3" />
+                            {!dictionaryDefinitions[i] ? 'Define' :
+                              Array.isArray(dictionaryDefinitions[i]) ? 'Defined' :
+                                dictionaryDefinitions[i] === "Looking up definition..." ? 'Looking up...' : 'Define'}
+                          </button>
+                          {msg.textSync?.isTruncated && (
+                            <button
+                              onClick={() => {
+                                const isExpanded = expandedMessageIndices[i];
+                                // Toggle expansion
+                                setExpandedMessageIndices(prev => ({
+                                  ...prev,
+                                  [i]: !isExpanded
+                                }));
+                                // If expanding, speak the full text
+                                if (!isExpanded) {
+                                  const expandedText = expandResponse(msg.textSync.rawText);
+                                  speak(expandedText);
+                                }
+                              }}
+                              className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                            >
+                              <span>{expandedMessageIndices[i] ? 'Show less' : 'Show more'}</span>
+                            </button>
+                          )}
+                        </div>
+                        {grammarExplanations[i] && (
+                          <div className="mt-3 p-3 bg-purple-50 border border-purple-100 rounded-lg text-sm text-gray-700">
+                            <div className="flex items-center gap-1 mb-1">
+                              <SparklesIcon className="w-3 h-3 text-purple-600" />
+                              <span className="font-medium text-purple-700">Grammar Explanation</span>
+                            </div>
+                            <p className="whitespace-pre-wrap">{grammarExplanations[i]}</p>
+                          </div>
                         )}
-                      </div>
+                        {dictionaryDefinitions[i] && (
+                          <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-lg text-sm text-gray-700">
+                            <div className="flex items-center gap-1 mb-1">
+                              <BookOpenIcon className="w-3 h-3 text-green-600" />
+                              <span className="font-medium text-green-700">Dictionary Definition</span>
+                            </div>
+                            {Array.isArray(dictionaryDefinitions[i]) ? (
+                              <div className="space-y-2">
+                                {dictionaryDefinitions[i].map((def, idx) => (
+                                  <div key={idx} className="border-l-2 border-green-300 pl-2">
+                                    {def.partOfSpeech && def.partOfSpeech !== 'unknown' && (
+                                      <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full mb-1">
+                                        {def.partOfSpeech}
+                                      </div>
+                                    )}
+                                    <p className="text-gray-800">{def.definition}</p>
+                                    {def.example && (
+                                      <p className="text-gray-600 italic mt-1">Example: "{def.example}"</p>
+                                    )}
+                                    {def.source && (
+                                      <p className="text-gray-500 text-xs mt-1">Source: {def.source}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="whitespace-pre-wrap">{dictionaryDefinitions[i]}</p>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
