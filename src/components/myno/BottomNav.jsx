@@ -4,13 +4,17 @@ import {
   HomeIcon as HomeOutline,
   ChatBubbleLeftRightIcon as MessageCircleOutline,
   BookOpenIcon as BookOpenOutline,
-  TrophyIcon as CrownOutline
+  BookmarkIcon as BookmarkOutline,
+  TrophyIcon as CrownOutline,
+  ChartBarIcon as ChartBarOutline
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeSolid,
   ChatBubbleLeftRightIcon as MessageCircleSolid,
   BookOpenIcon as BookOpenSolid,
-  TrophyIcon as CrownSolid
+  BookmarkIcon as BookmarkSolid,
+  TrophyIcon as CrownSolid,
+  ChartBarIcon as ChartBarSolid
 } from "@heroicons/react/24/solid";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -26,13 +30,19 @@ const navItems = [
     path: "/chat",
     iconOutline: MessageCircleOutline,
     iconSolid: MessageCircleSolid,
-    label: "Coach"
+    label: "Practice"
   },
   {
     path: "/vault",
     iconOutline: BookOpenOutline,
     iconSolid: BookOpenSolid,
     label: "Vault"
+  },
+  {
+    path: "/progress",
+    iconOutline: ChartBarOutline,
+    iconSolid: ChartBarSolid,
+    label: "Progress"
   },
   {
     path: "/pro",
@@ -47,7 +57,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t">
-      <div className="max-w-md mx-auto flex items-center justify-around px-2 py-2 pb-safe">
+      <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-2 pb-safe">
         {navItems.map(({ path, iconOutline: IconOutline, iconSolid: IconSolid, label }) => {
           const active = pathname === path;
           const Icon = active ? IconSolid : IconOutline;

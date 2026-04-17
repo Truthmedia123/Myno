@@ -9,7 +9,6 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import Chat from './pages/Chat';
 import WordVault from './pages/WordVault';
-import Vocabulary from './pages/Vocabulary';
 import Progress from './pages/Progress';
 import Paywall from './pages/Paywall';
 import ShareModal from '@/components/myno/ShareModal';
@@ -47,7 +46,6 @@ const AuthenticatedApp = () => {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/chat" element={<Chat />} />
       <Route path="/vault" element={<WordVault />} />
-      <Route path="/vocabulary" element={<Vocabulary />} />
       <Route path="/progress" element={<Progress />} />
       <Route path="/pro" element={<Paywall />} />
       <Route path="*" element={<PageNotFound />} />
