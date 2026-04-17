@@ -101,6 +101,7 @@ export default function Chat() {
   const streakUpdated = useRef(false);
   const vocabReviewShown = useRef(false);
   const lowScoreRef = useRef(0);
+  const pendingLessonTopic = useRef('');
   const dbActions = useFirebaseDatabase();
 
   // Phoneme feedback toast
@@ -242,6 +243,7 @@ export default function Chat() {
     if (!topic.trim()) return;
 
     setGeneratingLesson(true);
+    pendingLessonTopic.current = topic;
 
     try {
       const systemPrompt = `You are a world‑class language‑learning curriculum designer. Create a structured lesson for a ${profile?.target_language || "English"} learner (native language: ${profile?.native_language || "English"}) about the topic: "${topic}". The lesson should be appropriate for their current level (${profile?.level || "beginner"}).`;
@@ -289,10 +291,27 @@ Return ONLY a valid JSON object with these exact keys: title, intro, examples (a
 
     } catch (error) {
       console.error("Failed to generate custom lesson:", error);
-      setMessages(prev => [...prev, {
+
+      const errorMessage = {
         role: "assistant",
-        content: `I couldn't generate a custom lesson about "${topic}" right now. Let's talk about it anyway! What would you like to learn about ${topic} in ${profile?.target_language || "English"}?`
-      }]);
+        content: `I'm having trouble creating a custom lesson about "${topic}" right now. Would you like to try a ready-made lesson instead?`,
+        quickReplies: [
+          {
+            label: "✈️ Travel",
+            prompt: "Let's practice travel phrases and conversations."
+          },
+          {
+            label: "🍽️ Restaurant",
+            prompt: "I want to learn how to order food and talk in a restaurant."
+          },
+          {
+            label: "🔄 Try Again",
+            action: "retry"
+          }
+        ]
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setGeneratingLesson(false);
       setShowLessonInput(false);
@@ -2083,6 +2102,29 @@ Keep the explanation concise (3-4 sentences) and use simple language. Explain in
                     <p className="text-base leading-relaxed whitespace-pre-wrap">
                       {expandedMessageIndices[i] ? msg.textSync?.rawText || msg.content : msg.content}
                     </p>
+
+                    {/* Quick Replies for error recovery */}
+                    {msg.quickReplies && msg.quickReplies.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {msg.quickReplies.map((reply, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              if (reply.action === 'retry') {
+                                // Re-trigger custom lesson with the same topic
+                                generateCustomLesson(pendingLessonTopic.current);
+                              } else {
+                                sendMessage(reply.prompt);
+                              }
+                            }}
+                            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-full text-sm font-medium transition"
+                          >
+                            {reply.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {msg.role === "assistant" && (
                       <>
                         <div className="flex items-center gap-2 mt-2">

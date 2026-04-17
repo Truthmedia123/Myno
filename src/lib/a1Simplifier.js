@@ -226,7 +226,7 @@ export function gentleSimplify(text, syllabusVocab = [], userLang = 'en') {
     // Development debug flag - can be enabled via localStorage or environment
     const DEBUG = typeof window !== 'undefined' && window.localStorage
         ? window.localStorage.getItem('debug_gentleSimplify') === 'true'
-        : process.env.NODE_ENV === 'development';
+        : import.meta.env?.DEV === true;
 
     // Dev-only logging for Hindi debugging
     if (import.meta.env?.DEV && userLang === 'hi') {
@@ -713,7 +713,7 @@ export function finalCleanup(text) {
     // Development debug flag - can be enabled via localStorage or environment
     const DEBUG = typeof window !== 'undefined' && window.localStorage
         ? window.localStorage.getItem('debug_finalCleanup') === 'true'
-        : process.env.NODE_ENV === 'development';
+        : import.meta.env?.DEV === true;
 
     let cleaned = text;
 

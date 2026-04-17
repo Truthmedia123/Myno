@@ -83,24 +83,24 @@ const ENGLISH_A1 = {
     ],
     // For learningGoals.js compatibility: array of unique vocab theme strings
     vocabThemes: ['greetings', 'politeness', 'basics', 'food', 'home', 'social'],
-    phonemes: ['th sounds (voiceless/voiced)', 'r vs l', 'short/long vowels (ship/sheep)'],
+    phonemes: ["'th' sounds (think/that)", "r vs l", "short/long vowels (ship/sheep)"],
     // Detailed phoneme objects for other parts of the app
     phonemeDetails: [
         {
             char: 'θ/ð',
-            name: 'TH sounds (voiceless/voiced)',
+            name: "'th' sounds (think/that)",
             tip: 'Voiceless TH (θ): tongue between teeth, air flows. As in "think", "thank". Voiced TH (ð): same position but with vocal vibration. As in "this", "that".',
             practice: 'Practice "think" vs "sink", "this" vs "dis".'
         },
         {
             char: 'r/l',
-            name: 'R vs L distinction',
+            name: 'r vs l',
             tip: 'R: tongue curls back but doesn\'t touch roof. L: tongue tip touches alveolar ridge. Many languages confuse these sounds.',
             practice: 'Repeat "right" vs "light", "red" vs "led".'
         },
         {
             char: 'ɪ/iː',
-            name: 'Short vs Long Vowels',
+            name: 'short/long vowels (ship/sheep)',
             tip: 'Short I (ɪ) as in "ship", "bit". Long E (iː) as in "sheep", "beat". Hold the long vowel longer.',
             practice: 'Say "ship" vs "sheep", "bit" vs "beat".'
         }

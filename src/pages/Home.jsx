@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { FireIcon, BookOpenIcon, SparklesIcon, TrophyIcon, TrophyIcon as CrownIcon, ChartBarIcon, FlagIcon } from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
+import { FireIcon, BookOpenIcon, SparklesIcon, TrophyIcon, TrophyIcon as CrownIcon, ChartBarIcon, FlagIcon, ChevronDownIcon, ChevronRightIcon, ShareIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useFirebaseDatabase } from "@/hooks/useFirebaseDatabase";
 import MynoBird from "@/components/myno/MynoBird";
 import BottomNav from "@/components/myno/BottomNav";
+import ThemeToggle from "@/components/myno/ThemeToggle";
 import { checkPendingNotifications } from "@/lib/notifications";
 import { getTodayMission } from "@/lib/curriculum";
 import { getLevelFromXP } from "@/lib/xpSystem";
@@ -146,11 +147,21 @@ export default function Home() {
   const [weakPhonemes, setWeakPhonemes] = useState([]);
   const [weekReport, setWeekReport] = useState(null);
   const [savedWords, setSavedWords] = useState([]);
+  const [expandedSections, setExpandedSections] = useState({
+    streak: true,
+    focus: true,
+    weekly: true,
+    roadmap: false  // default collapsed - longer content
+  });
   const previousLevelInfoRef = useRef(null);
   const { user } = useAuth();
   const dbActions = useFirebaseDatabase();
   const navigate = useNavigate();
   const { addToast } = useToast();
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Fetch weekly session data
   const fetchWeeklySessions = async (userId) => {
@@ -363,6 +374,45 @@ export default function Home() {
   const hasNotPracticedToday = lastSession !== today;
   const showStreakWarning = hasNotPracticedToday && isAfter5pm && profile?.daily_streak > 0;
 
+  // CollapsibleSection component
+  const CollapsibleSection = ({ title, icon: Icon, expanded, onToggle, badge, children }) => (
+    <div className="mb-3">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 bg-card rounded-2xl border border-border shadow-sm hover:bg-muted/10 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="w-5 h-5 text-primary" />
+          <span className="font-semibold text-foreground">{title}</span>
+          {badge !== undefined && badge !== null && (
+            <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">
+              {badge}
+            </span>
+          )}
+        </div>
+        {expanded ?
+          <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> :
+          <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />
+        }
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 px-1">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto pb-24">
       {/* Top bar */}
@@ -372,21 +422,23 @@ export default function Home() {
           <span className="text-sm font-extrabold text-orange-500">{streak}</span>
           <button
             onClick={() => shareContent(getShareText("streak", { language: profile?.target_language, days: streak }))}
-            className="text-xs text-muted-foreground hover:text-green-500 transition-colors"
+            className="ml-1 p-1.5 rounded-full hover:bg-muted transition-colors"
             title="Share streak"
           >
-            📲
+            <ShareIcon className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
 
-        <Link to="/pro" className="flex items-center gap-2 bg-secondary/10 border border-secondary/20 rounded-2xl px-3 py-1.5">
-          <CrownIcon className="w-4 h-4 text-secondary" />
-          <span className="text-xs font-bold text-secondary">Pro</span>
-        </Link>
-
-        <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-2xl px-3 py-1.5">
-          <BookOpenIcon className="w-4 h-4 text-secondary" />
-          <span className="text-sm font-extrabold text-secondary">{wordsMastered}</span>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link to="/pro" className="flex items-center gap-2 bg-secondary/10 border border-secondary/20 rounded-2xl px-3 py-1.5">
+            <CrownIcon className="w-4 h-4 text-secondary" />
+            <span className="text-xs font-bold text-secondary">Pro</span>
+          </Link>
+          <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-2xl px-3 py-1.5">
+            <BookOpenIcon className="w-4 h-4 text-secondary" />
+            <span className="text-sm font-extrabold text-secondary">{wordsMastered}</span>
+          </div>
         </div>
       </div>
 
@@ -403,127 +455,176 @@ export default function Home() {
 
       {/* Streak warning banner */}
       {showStreakWarning && (
-        <div
-          onClick={() => navigate("/chat")}
-          className="mx-4 mb-4 p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 cursor-pointer flex items-center gap-3"
+        <CollapsibleSection
+          title="Streak Alert"
+          icon={FireIcon}
+          expanded={expandedSections.streak}
+          onToggle={() => toggleSection('streak')}
+          badge={streak}
         >
-          <span className="text-2xl">🔥</span>
-          <div className="flex-1">
-            <p className="text-sm font-bold text-orange-600">Your streak is at risk!</p>
-            <p className="text-xs text-muted-foreground">Practice for 2 minutes to keep your {profile.daily_streak}-day streak alive</p>
+          <div className="p-4 rounded-2xl bg-orange-100 border border-orange-300">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔥</span>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-orange-900">Don't lose your streak!</p>
+                <p className="text-xs text-orange-800">
+                  Practice for 2 minutes to keep your {profile?.daily_streak || 0}-day streak alive
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/chat")}
+                className="px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition"
+              >
+                Practice Now
+              </button>
+            </div>
           </div>
-          <span className="text-primary text-sm font-medium">→</span>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Focus Area Card - Weak Phonemes */}
       {weakPhonemes.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="mx-4 mb-4 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30"
+        <CollapsibleSection
+          title="Focus Area"
+          icon={FlagIcon}
+          expanded={expandedSections.focus}
+          onToggle={() => toggleSection('focus')}
+          badge={weakPhonemes.length}
         >
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2">
-              <FlagIcon className="w-4 h-4 text-purple-600" />
-              <p className="text-sm font-bold text-purple-700">Focus Area</p>
-            </div>
-            <button
-              onClick={() => navigate("/chat")}
-              className="text-xs text-purple-600 underline underline-offset-2"
-            >
-              Practice Now →
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            Based on your recent pronunciation, these sounds need extra attention:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {weakPhonemes.map((phoneme, idx) => (
-              <div
-                key={idx}
-                className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs font-medium text-purple-700"
-              >
-                {phoneme}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="p-4 rounded-xl bg-purple-100 border border-purple-300"
+          >
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <FlagIcon className="w-4 h-4 text-purple-800" />
+                <p className="text-sm font-bold text-purple-900">Focus Area</p>
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Try the <span className="font-medium text-purple-600">Speaking Drills</span> mode in chat for targeted practice.
-          </p>
-        </motion.div>
+              <button
+                onClick={() => navigate("/chat")}
+                className="text-xs text-purple-800 underline underline-offset-2"
+              >
+                Practice Now →
+              </button>
+            </div>
+            <p className="text-xs text-purple-800 mb-3">
+              Based on your recent pronunciation, these sounds need extra attention:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {weakPhonemes.map((phoneme, idx) => (
+                <div
+                  key={idx}
+                  className="px-3 py-1.5 bg-purple-200 border border-purple-300 rounded-full text-xs font-medium text-purple-900"
+                >
+                  {phoneme}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-purple-800 mt-3">
+              Try the <span className="font-medium text-purple-900">Speaking Drills</span> mode in chat for targeted practice.
+            </p>
+          </motion.div>
+        </CollapsibleSection>
       )}
 
       {/* Weekly Progress Chart */}
-      {profile && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mx-4 mb-4 p-4 rounded-2xl bg-card border border-border shadow-card"
+      {profile && weeklyData.length > 0 ? (
+        <CollapsibleSection
+          title="Weekly Progress"
+          icon={ChartBarIcon}
+          expanded={expandedSections.weekly}
+          onToggle={() => toggleSection('weekly')}
+          badge={weeklyData.reduce((sum, day) => sum + day.sessions, 0)}
         >
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2">
-              <ChartBarIcon className="w-4 h-4 text-primary" />
-              <p className="text-sm font-bold text-foreground">Weekly Progress</p>
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="p-4 rounded-xl bg-card border border-border shadow-card"
+          >
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <ChartBarIcon className="w-4 h-4 text-primary" />
+                <p className="text-sm font-bold text-foreground">Weekly Progress</p>
+              </div>
+              <button
+                onClick={() => navigate("/chat")}
+                className="text-xs text-primary underline underline-offset-2"
+              >
+                View Details →
+              </button>
             </div>
+            <div className="h-48 flex items-center justify-center">
+              {isLoadingChart ? (
+                <LoadingSpinner size="md" />
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={weeklyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--muted)" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      stroke="var(--muted-foreground)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="var(--muted-foreground)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '12px',
+                        fontSize: '12px'
+                      }}
+                      labelStyle={{ color: 'var(--foreground)', fontWeight: 'bold' }}
+                      formatter={(value) => [`${value} sessions`, 'Sessions']}
+                    />
+                    <Bar
+                      dataKey="sessions"
+                      fill="var(--primary)"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={30}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            {!isLoadingChart && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                {weeklyData.reduce((sum, day) => sum + day.sessions, 0)} sessions this week
+              </p>
+            )}
+          </motion.div>
+        </CollapsibleSection>
+      ) : (
+        <CollapsibleSection
+          title="Weekly Progress"
+          icon={ChartBarIcon}
+          expanded={expandedSections.weekly}
+          onToggle={() => toggleSection('weekly')}
+        >
+          <div className="p-6 rounded-2xl bg-card border border-border flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <ChartBarIcon className="w-8 h-8 text-primary" />
+            </div>
+            <p className="text-sm font-medium text-foreground mb-1">No activity yet this week</p>
+            <p className="text-xs text-muted-foreground mb-4">Start a conversation to see your progress!</p>
             <button
               onClick={() => navigate("/chat")}
-              className="text-xs text-primary underline underline-offset-2"
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium"
             >
-              View Details →
+              Start Practicing
             </button>
           </div>
-          <div className="h-48 flex items-center justify-center">
-            {isLoadingChart ? (
-              <LoadingSpinner size="md" />
-            ) : weeklyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--muted)" vertical={false} />
-                  <XAxis
-                    dataKey="day"
-                    stroke="var(--muted-foreground)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="var(--muted-foreground)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '12px',
-                      fontSize: '12px'
-                    }}
-                    labelStyle={{ color: 'var(--foreground)', fontWeight: 'bold' }}
-                    formatter={(value) => [`${value} sessions`, 'Sessions']}
-                  />
-                  <Bar
-                    dataKey="sessions"
-                    fill="var(--primary)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={30}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground">No weekly data available</p>
-            )}
-          </div>
-          {!isLoadingChart && weeklyData.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              {weeklyData.reduce((sum, day) => sum + day.sessions, 0)} sessions this week
-            </p>
-          )}
-        </motion.div>
+        </CollapsibleSection>
       )}
 
       {/* Weekly Progress Report Card */}
@@ -547,10 +648,10 @@ export default function Home() {
                 wordsThisWeek: weekReport.wordsThisWeek,
                 performance: weekReport.performance
               }))}
-              className="text-xs text-green-600 hover:text-green-700 transition-colors"
+              className="p-1.5 rounded-full hover:bg-muted transition-colors"
               title="Share weekly report"
             >
-              📲
+              <ShareIcon className="w-4 h-4 text-green-600" />
             </button>
           </div>
 
@@ -627,9 +728,10 @@ export default function Home() {
         )}
         <button
           onClick={() => shareContent(getShareText("level_up", { language: profile?.target_language, level: levelInfo?.title }))}
-          className="text-xs text-muted-foreground hover:text-green-500 mt-1"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-green-500 mt-1"
         >
-          Share progress 📲
+          <ShareIcon className="w-3 h-3" />
+          Share progress
         </button>
       </div>
 
@@ -657,55 +759,63 @@ export default function Home() {
       )}
 
       {/* 7-Day Learning Path Roadmap */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="mx-4 mb-4"
+      <CollapsibleSection
+        title="Your 7-Day Path"
+        icon={BookOpenIcon}
+        expanded={expandedSections.roadmap}
+        onToggle={() => toggleSection('roadmap')}
+        badge={currentDay}
       >
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-sm font-bold text-foreground">Your 7-Day Path</p>
-          <p className="text-xs text-muted-foreground">Level: {levelNames[userLevel]}</p>
-        </div>
-        <div className="space-y-2">
-          {roadmap.map((item) => {
-            const isDone = item.day < currentDay;
-            const isToday = item.day === currentDay;
-            return (
-              <div
-                key={item.day}
-                onClick={() => isToday && navigate("/chat")}
-                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isToday
-                  ? "bg-primary/10 border-primary/30 shadow-sm"
-                  : isDone
-                    ? "bg-muted/30 border-border/50"
-                    : "bg-card border-border"
-                  } ${isToday ? "hover:bg-primary/15" : ""}`}
-              >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${isToday ? "bg-primary text-white" : isDone ? "bg-muted text-muted-foreground" : "bg-muted/50 text-foreground"
-                  }`}>
-                  {item.icon}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">Day {item.day}</span>
-                    {isToday && (
-                      <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">Today</span>
-                    )}
-                    {isDone && (
-                      <span className="text-xs text-muted-foreground">✓ Done</span>
-                    )}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="space-y-2"
+        >
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-sm font-bold text-foreground">Your 7-Day Path</p>
+            <p className="text-xs text-muted-foreground">Level: {levelNames[userLevel]}</p>
+          </div>
+          <div className="space-y-2">
+            {roadmap.map((item) => {
+              const isDone = item.day < currentDay;
+              const isToday = item.day === currentDay;
+              return (
+                <div
+                  key={item.day}
+                  onClick={() => isToday && navigate("/chat")}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isToday
+                    ? "bg-primary/10 border-primary/30 shadow-sm"
+                    : isDone
+                      ? "bg-muted/30 border-border/50"
+                      : "bg-card border-border"
+                    } ${isToday ? "hover:bg-primary/15" : ""}`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${isToday ? "bg-primary text-white" : isDone ? "bg-muted text-muted-foreground" : "bg-muted/50 text-foreground"
+                    }`}>
+                    {item.icon}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.task}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">Day {item.day}</span>
+                      {isToday && (
+                        <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">Today</span>
+                      )}
+                      {isDone && (
+                        <span className="text-xs text-muted-foreground">✓ Done</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.task}</p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-xs text-muted-foreground mt-3 text-center">
-          Complete today's task to unlock Day {currentDay + 1 > 7 ? 1 : currentDay + 1}
-        </p>
-      </motion.div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            Complete today's task to unlock Day {currentDay + 1 > 7 ? 1 : currentDay + 1}
+          </p>
+        </motion.div>
+      </CollapsibleSection>
 
       {/* Thumb-zone CTAs */}
       <div className="px-5 pb-6 space-y-3">

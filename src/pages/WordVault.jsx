@@ -122,6 +122,7 @@ export default function WordVault() {
   const [flashcardMode, setFlashcardMode] = useState(false);
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [hasIndexError, setHasIndexError] = useState(false);
 
   const { data: words = [], isLoading } = useQuery({
     queryKey: ["words", dbActions],
@@ -135,6 +136,12 @@ export default function WordVault() {
         return result;
       } catch (error) {
         console.log("Offline mode: falling back to cached words", error);
+
+        // Check if this is a Firestore index error
+        const errorMessage = error?.message || error?.toString() || '';
+        const isIndexError = errorMessage.toLowerCase().includes('index');
+        setHasIndexError(isIndexError);
+
         // Fallback to local cache
         const localWords = getLocalWords();
         if (localWords.length > 0) {
@@ -198,6 +205,63 @@ export default function WordVault() {
     setAddInput("");
     setIsAdding(false);
   };
+
+  if (hasIndexError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 pb-24">
+        <div className="w-28 h-28 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+          <BookOpenIcon className="w-14 h-14 text-primary" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Setting up your Word Vault</h2>
+        <div className="text-center py-8 text-muted-foreground">
+          <p>We're setting up the database for your Word Vault.</p>
+          <p className="text-xs mt-2">This may take a moment on first use.</p>
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-sm text-muted-foreground mb-2">
+            If this message persists, you may need to create a Firestore index.
+          </p>
+          <a
+            href="https://console.firebase.google.com/u/0/project/_/firestore/indexes"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs px-4 py-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition"
+          >
+            Open Firebase Console
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (words.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 pb-24">
+        <div className="w-28 h-28 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+          <BookOpenIcon className="w-14 h-14 text-primary" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Your vault is empty</h2>
+        <p className="text-sm text-muted-foreground text-center mb-8 max-w-xs">
+          Words you save during conversations with Myno will appear here.
+          Start building your personal dictionary!
+        </p>
+        <Link
+          to="/chat"
+          className="px-8 py-3 bg-primary text-primary-foreground rounded-full font-medium hover:bg-primary/90 transition shadow-lg"
+        >
+          Go to Practice →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto pb-24">
@@ -291,18 +355,16 @@ export default function WordVault() {
 
       {/* Word list */}
       <div className="px-4 pt-4 space-y-3">
-        {isLoading ? (
-          <div className="flex justify-center py-16"><LoadingSpinner size="md" /></div>
-        ) : filteredWords.length === 0 ? (
+        {filteredWords.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-3 text-center">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
               <BookOpenIcon className="w-7 h-7 text-muted-foreground" />
             </div>
-            <p className="font-bold text-foreground">No words yet</p>
+            <p className="font-bold text-foreground">No words found</p>
             <p className="text-sm text-muted-foreground px-8">
               {filterLang !== "All"
                 ? `No ${filterLang} words found. Try another language filter.`
-                : "Chat with Myno — interesting words get saved automatically!"}
+                : "Try searching for a different word or add a new one!"}
             </p>
           </div>
         ) : (

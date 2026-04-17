@@ -6,6 +6,7 @@
  */
 
 import { getPhonemeTip } from '../curriculum/shared/phonemeGuide.js';
+import { getMemory, formatMemoryContext } from './conversationMemory.js';
 
 /**
  * Build a scenario-specific prompt with user context injection.
@@ -96,7 +97,7 @@ Now begin the conversation.`;
  * @param {Object|null} lessonFocus - Current lesson focus from lessonFlow.getFocus()
  * @returns {string} Complete prompt for Groq API
  */
-export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '', correctionLanguage = 'en', lessonFocus = null) {
+export async function buildCurriculumPrompt(scenario, userProfile = null, syllabus = null, memoryContext = '', correctionLanguage = 'en', lessonFocus = null) {
     // Default profile if missing
     const profile = userProfile || {
         cefrLevel: 'A1',
@@ -112,6 +113,22 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
         target_language = 'English',
         weakPhonemes = []
     } = profile;
+
+    // Native language support (Native-Aware Immersion)
+    let nativeLanguageGuidance = '';
+    if (native_language && native_language.toLowerCase() !== target_language.toLowerCase()) {
+        nativeLanguageGuidance = `
+NATIVE LANGUAGE SUPPORT (${native_language}):
+- User's native language is ${native_language}.
+- Speak 90% in ${target_language}. This is essential for immersion.
+- You may use ${native_language} for up to 10% of your response ONLY in these situations:
+  1. To clarify a complex grammar point briefly.
+  2. To provide a single word translation when user is clearly confused.
+  3. To offer encouragement when user is frustrated.
+- Example: "In ${native_language}, we say 'hola'. In ${target_language}, we say 'hello'."
+- Never translate entire sentences. Keep ${native_language} usage minimal and purposeful.
+`;
+    }
 
     // Extract scenario data
     const scenarioPrompt = scenario?.promptTemplate || '';
@@ -133,7 +150,7 @@ export function buildCurriculumPrompt(scenario, userProfile = null, syllabus = n
     // Get all vocabulary words from syllabus for enforcement
     const allVocabWords = (syllabus.vocab || []).map(item => item.word);
     const targetVocab = allVocabWords.slice(0, 3).join(', ');
-    const vocabText = targetVocab ? `When practicing ${target_language}, use simple A1 vocabulary: ${allVocabWords.join(', ')}. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.` : '';
+    const vocabText = targetVocab ? `When practicing ${target_language}, use simple ${cefrLevel} vocabulary: ${allVocabWords.join(', ')}. If you must use an advanced word, add English hint in parentheses: 'la cuenta (bill)'.` : '';
 
     // Get phoneme targets from syllabus or user profile
     const syllabusPhonemes = syllabus.phonemes || [];
@@ -222,10 +239,47 @@ GRAMMAR FOCUS: ${focusGrammarTip || 'none'}`;
     // Combine memory context
     const fullMemoryContext = memoryContext ? `${memoryContext}\n` : '';
 
-    // Build the curriculum-injected prompt (concise for token limit)
-    const prompt = `You are Myno, a friendly and encouraging ${target_language} tutor for a beginner (${cefrLevel} level).
+    // Get structured memory context if user profile has ID
+    let structuredMemoryContext = '';
+    if (userProfile?.id) {
+        try {
+            const memory = await getMemory(userProfile.id);
+            structuredMemoryContext = formatMemoryContext(memory);
+        } catch (error) {
+            console.warn('Failed to load conversation memory:', error);
+        }
+    }
 
-Speak in short, clear, and complete sentences. Be warm and supportive. If the user makes a small mistake, gently correct it within your response.
+    // Build the curriculum-injected prompt (concise for token limit)
+    const prompt = `You are Myno, a friendly and encouraging ${target_language} tutor for a ${cefrLevel} learner.
+
+SCENARIO: ${title} (CEFR ${cefr})
+${scenarioPrompt}
+
+TEACHING FOCUS:
+- Grammar: ${grammarFocus} - ${grammarTip}
+- Vocabulary: Use ${cefrLevel}-level words including: ${targetVocab || 'common beginner vocabulary'}
+- Pronunciation: ${phonemeText || 'Focus on clear articulation'}
+- Pragmatics: ${pragmaticsRule}
+
+${vocabText}
+
+${lessonContext ? `LESSON CONTEXT:\n${lessonContext}\n` : ''}
+
+${structuredMemoryContext ? `CONVERSATION MEMORY:\n${structuredMemoryContext}\n` : ''}
+
+${adaptiveInstructions}
+
+${nativeLanguageGuidance}
+
+${fullMemoryContext}
+
+TEACHING RULES:
+1. Keep responses to 2-3 sentences maximum
+2. Correct only one major error per turn for ${cefrLevel} learners
+3. Use simple, clear ${target_language} appropriate for ${cefrLevel} level
+4. Be warm, encouraging, and patient
+5. End with a follow-up question to continue the conversation
 
 Reply as Myno:`;
 
