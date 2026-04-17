@@ -14,6 +14,8 @@ import { shareContent, getShareText } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useToast } from "@/context/ToastContext";
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const ROADMAP = {
   Travel: {
@@ -148,6 +150,7 @@ export default function Home() {
   const { user } = useAuth();
   const dbActions = useFirebaseDatabase();
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   // Fetch weekly session data
   const fetchWeeklySessions = async (userId) => {
@@ -453,7 +456,7 @@ export default function Home() {
       )}
 
       {/* Weekly Progress Chart */}
-      {profile && weeklyData.length > 0 && (
+      {profile && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -472,46 +475,54 @@ export default function Home() {
               View Details →
             </button>
           </div>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted)" vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  stroke="var(--muted-foreground)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--muted-foreground)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '12px',
-                    fontSize: '12px'
-                  }}
-                  labelStyle={{ color: 'var(--foreground)', fontWeight: 'bold' }}
-                  formatter={(value) => [`${value} sessions`, 'Sessions']}
-                />
-                <Bar
-                  dataKey="sessions"
-                  fill="var(--primary)"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={30}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-48 flex items-center justify-center">
+            {isLoadingChart ? (
+              <LoadingSpinner size="md" />
+            ) : weeklyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--muted)" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '12px',
+                      fontSize: '12px'
+                    }}
+                    labelStyle={{ color: 'var(--foreground)', fontWeight: 'bold' }}
+                    formatter={(value) => [`${value} sessions`, 'Sessions']}
+                  />
+                  <Bar
+                    dataKey="sessions"
+                    fill="var(--primary)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={30}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">No weekly data available</p>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            {weeklyData.reduce((sum, day) => sum + day.sessions, 0)} sessions this week
-          </p>
+          {!isLoadingChart && weeklyData.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {weeklyData.reduce((sum, day) => sum + day.sessions, 0)} sessions this week
+            </p>
+          )}
         </motion.div>
       )}
 

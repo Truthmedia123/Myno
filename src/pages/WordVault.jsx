@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { shareContent, getShareText } from "@/lib/utils";
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 // Local storage caching functions
 const cacheWordsLocally = (words) => {
@@ -291,7 +292,7 @@ export default function WordVault() {
       {/* Word list */}
       <div className="px-4 pt-4 space-y-3">
         {isLoading ? (
-          <div className="flex justify-center py-16"><ArrowPathIcon className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          <div className="flex justify-center py-16"><LoadingSpinner size="md" /></div>
         ) : filteredWords.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-3 text-center">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">

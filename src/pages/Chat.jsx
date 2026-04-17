@@ -24,6 +24,9 @@ import { addWord, wordExists } from "@/lib/vocabStore";
 import { getTranslation } from "@/lib/translationCache";
 import { updateMemory, detectTopic, getMemory } from "@/lib/conversationMemory.js";
 import { lookupWord } from "@/lib/dictionaryService";
+import { useToast } from "@/context/ToastContext";
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { MessageSkeleton } from '@/components/ui/Skeleton';
 
 const replySets = [
   ["Tell me more", "Give me an example", "Too hard, simplify"],
@@ -66,8 +69,6 @@ export default function Chat() {
   const [sessionMessages, setSessionMessages] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [showScenarios, setShowScenarios] = useState(true);
-  const [streakToast, setStreakToast] = useState(null);
-  const [savedToast, setSavedToast] = useState(null);
   const [vocabReviewWords, setVocabReviewWords] = useState([]);
   const [recentMistakes, setRecentMistakes] = useState([]);
   const [showDailyLesson, setShowDailyLesson] = useState(false);
@@ -107,6 +108,9 @@ export default function Chat() {
     phonemeCorrection,
     profile?.target_language || 'en'
   );
+
+  // Unified toast system
+  const { addToast } = useToast();
 
   const getOrCreateSessionId = () => {
     let sid = sessionStorage.getItem("myno_session_id");
@@ -846,21 +850,12 @@ Reply with only valid JSON, no extra text.`;
       // Check if word already exists
       const exists = await wordExists(trimmedWord, targetLanguage);
       if (exists) {
-        setSavedToast({
-          type: 'info',
-          message: `"${trimmedWord}" is already in your vocabulary`,
-          word: trimmedWord
-        });
-        setTimeout(() => setSavedToast(null), 3000);
+        addToast(`"${trimmedWord}" is already in your vocabulary`, 'info');
         return;
       }
 
       // Show translation progress toast
-      setSavedToast({
-        type: 'info',
-        message: `Translating "${trimmedWord}"...`,
-        word: trimmedWord
-      });
+      addToast(`Translating "${trimmedWord}"...`, 'info');
 
       // Get translation from Mistral API
       const translation = await getTranslation(trimmedWord, targetLanguage, nativeLanguage);
@@ -882,15 +877,7 @@ Reply with only valid JSON, no extra text.`;
         ? `"${trimmedWord}" saved (${translation})`
         : `"${trimmedWord}" saved to vocabulary`;
 
-      setSavedToast({
-        type: 'success',
-        message: toastMessage,
-        word: trimmedWord,
-        translation: translation || null
-      });
-
-      // Auto-dismiss after 3 seconds
-      setTimeout(() => setSavedToast(null), 3000);
+      addToast(toastMessage, 'success');
 
       // Award XP for saving a word
       addXP(db, auth.currentUser?.uid, XP_VALUES.WORD_SAVED, "word saved");
@@ -905,12 +892,7 @@ Reply with only valid JSON, no extra text.`;
 
     } catch (error) {
       console.error('Error saving word to vocabulary:', error);
-      setSavedToast({
-        type: 'error',
-        message: `Failed to save "${trimmedWord}"`,
-        word: trimmedWord
-      });
-      setTimeout(() => setSavedToast(null), 3000);
+      addToast(`Failed to save "${trimmedWord}"`, 'error');
     }
   };
 
@@ -1101,8 +1083,7 @@ Keep the explanation concise (3-4 sentences) and use simple language. Explain in
         const newStreak = await updateDailyStreak(db, auth.currentUser?.uid);
         if (newStreak > 1) {
           // Show streak toast
-          setStreakToast(newStreak);
-          setTimeout(() => setStreakToast(null), 3000);
+          addToast(`🔥 ${newStreak}‑day streak!`, 'success');
         }
       }
 
@@ -1634,23 +1615,6 @@ Keep the explanation concise (3-4 sentences) and use simple language. Explain in
       {xpPopup && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-primary text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-lg animate-bounce pointer-events-none">
           +{xpPopup} XP ✨
-        </div>
-      )}
-
-      {/* Streak toast */}
-      {streakToast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-orange-500 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
-          🔥 {streakToast} day streak! Keep it going!
-        </div>
-      )}
-
-      {/* Vocabulary saved toast */}
-      {savedToast && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 ${savedToast.type === 'success' ? 'bg-green-500' : savedToast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'} text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce`}>
-          {savedToast.type === 'success' && '✅ '}
-          {savedToast.type === 'error' && '❌ '}
-          {savedToast.type === 'info' && 'ℹ️ '}
-          {savedToast.message}
         </div>
       )}
 
@@ -2273,17 +2237,7 @@ Keep the explanation concise (3-4 sentences) and use simple language. Explain in
           </div>
         )}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="flex gap-1.5 items-center">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "160ms" }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce-dot" style={{ animationDelay: "320ms" }} />
-              </div>
-            </div>
-          </div>
-        )}
+        {isLoading && <MessageSkeleton />}
       </div>
 
       {/* Streamlined Input Area */}
@@ -2368,7 +2322,7 @@ Keep the explanation concise (3-4 sentences) and use simple language. Explain in
             disabled={!input.trim() || isLoading}
             className="w-11 h-11 rounded-2xl bg-primary text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-primary/90"
           >
-            {isLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <PaperAirplaneIcon className="w-4 h-4" />}
+            {isLoading ? <LoadingSpinner size="sm" className="text-white" /> : <PaperAirplaneIcon className="w-4 h-4" />}
           </button>
         </div>
 

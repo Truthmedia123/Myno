@@ -9,8 +9,13 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import Chat from './pages/Chat';
 import WordVault from './pages/WordVault';
+import Vocabulary from './pages/Vocabulary';
+import Progress from './pages/Progress';
 import Paywall from './pages/Paywall';
 import ShareModal from '@/components/myno/ShareModal';
+import { ToastProvider } from '@/context/ToastContext';
+import ToastContainer from '@/components/ui/ToastContainer';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -19,7 +24,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -42,6 +47,8 @@ const AuthenticatedApp = () => {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/chat" element={<Chat />} />
       <Route path="/vault" element={<WordVault />} />
+      <Route path="/vocabulary" element={<Vocabulary />} />
+      <Route path="/progress" element={<Progress />} />
       <Route path="/pro" element={<Paywall />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
@@ -53,12 +60,15 @@ function App() {
 
   return (
     <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AuthenticatedApp />
-          <ShareModal />
-        </Router>
-      </QueryClientProvider>
+      <ToastProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <AuthenticatedApp />
+            <ShareModal />
+            <ToastContainer />
+          </Router>
+        </QueryClientProvider>
+      </ToastProvider>
     </AuthProvider>
   )
 }
