@@ -1,32 +1,39 @@
-// Vercel serverless function to proxy Mistral API requests
+// api/mistral.js
 export default async function handler(req, res) {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', true);
+    // CORS headers for browser requests
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle preflight OPTIONS request
+    // Handle preflight requests
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return res.status(200).end();
     }
 
     if (req.method !== 'POST') {
+        console.error('[api/mistral] Invalid method:', req.method);
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { messages, options } = req.body;
-    const apiKey = process.env.MISTRAL_API_KEY; // Server-side only
-
-    if (!apiKey) {
-        return res.status(500).json({ error: 'API key not configured' });
-    }
-
     try {
+        const { messages, options } = req.body;
+
+        // Try both possible environment variable names
+        const apiKey = process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY;
+
+        if (!apiKey) {
+            console.error('[api/mistral] CRITICAL: Missing Mistral API Key. Verify Vercel Environment Variables.');
+            return res.status(500).json({
+                error: 'Server configuration error: API key not found.'
+            });
+        }
+
+        const model = options?.model || 'mistral-small';
+        const temperature = options?.temperature ?? 0.3;
+        const maxTokens = options?.maxTokens ?? 512;
+
+        console.log(`[api/mistral] Forwarding request. Model: ${model}, Messages: ${messages.length}`);
+
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -34,17 +41,30 @@ export default async function handler(req, res) {
                 'Authorization': `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: options.model || 'mistral-small-latest',
+                model,
                 messages,
-                temperature: options.temperature || 0.3,
-                max_tokens: options.maxTokens || 512,
+                temperature,
+                max_tokens: maxTokens,
             }),
         });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[api/mistral] Mistral API Error (${response.status}):`, errorText);
+            return res.status(response.status).json({
+                error: `Mistral API error: ${response.status}`,
+                details: errorText
+            });
+        }
+
         const data = await response.json();
-        res.status(response.status).json(data);
+        return res.status(200).json(data);
+
     } catch (error) {
-        console.error('Mistral proxy error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('[api/mistral] Internal Server Error:', error);
+        return res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
     }
 }
