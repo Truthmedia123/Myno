@@ -101,6 +101,7 @@ const WordCard = ({ word, onDelete, onUpdateMastery }) => {
         <button
           onClick={() => onDelete(word.id)}
           className="text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-400 hover:bg-red-100 ml-auto"
+          aria-label="Delete word"
         >
           ✕
         </button>
@@ -268,7 +269,7 @@ export default function WordVault() {
       {/* Header */}
       <div className="sticky top-0 z-10 glass border-b px-4 py-4">
         <div className="flex items-center gap-3 mb-4">
-          <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+          <Link to="/" className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0" aria-label="Back">
             <ArrowLeftIcon className="w-4 h-4" />
           </Link>
           <div className="flex-1">

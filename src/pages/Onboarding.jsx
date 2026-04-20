@@ -372,7 +372,7 @@ export default function Onboarding() {
           ))}
         </div>
         {step > 0 && (
-          <button onClick={goBack} className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={goBack} className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors" aria-label="Back">
             ← Back
           </button>
         )}
@@ -540,6 +540,7 @@ export default function Onboarding() {
                             ? "bg-primary/30 cursor-not-allowed"
                             : "bg-secondary shadow-sea"
                           }`}
+                        aria-label={recording ? "Stop voice recording" : "Start voice recording"}
                       >
                         {recording && (
                           <div className="absolute inset-0 rounded-full bg-destructive/30 animate-pulse-ring" />

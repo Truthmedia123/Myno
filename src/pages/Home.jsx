@@ -424,6 +424,7 @@ export default function Home() {
             onClick={() => shareContent(getShareText("streak", { language: profile?.target_language, days: streak }))}
             className="ml-1 p-1.5 rounded-full hover:bg-muted transition-colors"
             title="Share streak"
+            aria-label="Share streak"
           >
             <ShareIcon className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -650,6 +651,7 @@ export default function Home() {
               }))}
               className="p-1.5 rounded-full hover:bg-muted transition-colors"
               title="Share weekly report"
+              aria-label="Share weekly report"
             >
               <ShareIcon className="w-4 h-4 text-green-600" />
             </button>

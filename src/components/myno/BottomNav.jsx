@@ -62,7 +62,7 @@ export default function BottomNav() {
           const active = pathname === path;
           const Icon = active ? IconSolid : IconOutline;
           return (
-            <Link key={path} to={path} className="relative flex flex-col items-center gap-0.5 px-5 py-2">
+            <Link key={path} to={path} className="relative flex flex-col items-center gap-0.5 px-5 py-2" aria-label={label}>
               {active && (
                 <motion.div
                   layoutId="nav-pill"
