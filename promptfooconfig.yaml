@@ -1,0 +1,149 @@
+description: "Myno AI Tutor - Full Multilingual Matrix (16 Languages × 3 CEFR Levels)"
+
+prompts:
+  - file://prompts/myno_system_prompt.txt
+
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: ${MISTRAL_API_KEY}
+      temperature: 0.3
+      max_tokens: 512
+
+scenarios:
+  # ============== A1 LEVEL ==============
+  - config:
+      - vars: { language: 'English', langCode: 'en', cefr: 'A1' }
+      - vars: { language: 'Spanish', langCode: 'es', cefr: 'A1' }
+      - vars: { language: 'French', langCode: 'fr', cefr: 'A1' }
+      - vars: { language: 'German', langCode: 'de', cefr: 'A1' }
+      - vars: { language: 'Italian', langCode: 'it', cefr: 'A1' }
+      - vars: { language: 'Portuguese', langCode: 'pt', cefr: 'A1' }
+      - vars: { language: 'Dutch', langCode: 'nl', cefr: 'A1' }
+      - vars: { language: 'Swedish', langCode: 'sv', cefr: 'A1' }
+      - vars: { language: 'Turkish', langCode: 'tr', cefr: 'A1' }
+      - vars: { language: 'Greek', langCode: 'el', cefr: 'A1' }
+      - vars: { language: 'Arabic', langCode: 'ar', cefr: 'A1' }
+      - vars: { language: 'Hindi', langCode: 'hi', cefr: 'A1' }
+      - vars: { language: 'Japanese', langCode: 'ja', cefr: 'A1' }
+      - vars: { language: 'Korean', langCode: 'ko', cefr: 'A1' }
+      - vars: { language: 'Mandarin', langCode: 'zh', cefr: 'A1' }
+      - vars: { language: 'Russian', langCode: 'ru', cefr: 'A1' }
+    tests:
+      - description: '{{language}} A1 - Neutral Opening'
+        vars: { user_input: 'Anything' }
+        assert:
+          - type: contains
+            value: learn
+          - type: contains
+            value: word
+          - type: contains
+            value: "Let's"
+          - type: not-contains
+            value: error
+          - type: not-contains
+            value: undefined
+      - description: '{{language}} A1 - Frustrated User'
+        vars: { user_input: 'No I have never seen a map' }
+        assert:
+          - type: not-contains
+            value: 'map'
+          - type: contains
+            value: try
+          - type: contains
+            value: different
+          - type: contains
+            value: another
+      - description: '{{language}} A1 - Confused User'
+        vars: { user_input: 'What does that mean?' }
+        assert:
+          - type: contains
+            value: means
+          - type: contains
+            value: example
+          - type: not-contains
+            value: error
+
+  # ============== A2 LEVEL ==============
+  - config:
+      - vars: { language: 'English', langCode: 'en', cefr: 'A2' }
+      - vars: { language: 'Spanish', langCode: 'es', cefr: 'A2' }
+      - vars: { language: 'French', langCode: 'fr', cefr: 'A2' }
+      - vars: { language: 'German', langCode: 'de', cefr: 'A2' }
+      - vars: { language: 'Italian', langCode: 'it', cefr: 'A2' }
+      - vars: { language: 'Portuguese', langCode: 'pt', cefr: 'A2' }
+      - vars: { language: 'Dutch', langCode: 'nl', cefr: 'A2' }
+      - vars: { language: 'Swedish', langCode: 'sv', cefr: 'A2' }
+      - vars: { language: 'Turkish', langCode: 'tr', cefr: 'A2' }
+      - vars: { language: 'Greek', langCode: 'el', cefr: 'A2' }
+      - vars: { language: 'Arabic', langCode: 'ar', cefr: 'A2' }
+      - vars: { language: 'Hindi', langCode: 'hi', cefr: 'A2' }
+      - vars: { language: 'Japanese', langCode: 'ja', cefr: 'A2' }
+      - vars: { language: 'Korean', langCode: 'ko', cefr: 'A2' }
+      - vars: { language: 'Mandarin', langCode: 'zh', cefr: 'A2' }
+      - vars: { language: 'Russian', langCode: 'ru', cefr: 'A2' }
+    tests:
+      - description: '{{language}} A2 - Neutral Opening'
+        vars: { user_input: 'Anything' }
+        assert:
+          - type: contains
+            value: learn
+          - type: contains
+            value: practice
+          - type: not-contains
+            value: error
+      - description: '{{language}} A2 - Frustrated User'
+        vars: { user_input: 'No I have never seen a map' }
+        assert:
+          - type: not-contains
+            value: 'map'
+      - description: '{{language}} A2 - Confused User'
+        vars: { user_input: 'What does that mean?' }
+        assert:
+          - type: contains
+            value: means
+          - type: contains
+            value: example
+
+  # ============== B1 LEVEL ==============
+  - config:
+      - vars: { language: 'English', langCode: 'en', cefr: 'B1' }
+      - vars: { language: 'Spanish', langCode: 'es', cefr: 'B1' }
+      - vars: { language: 'French', langCode: 'fr', cefr: 'B1' }
+      - vars: { language: 'German', langCode: 'de', cefr: 'B1' }
+      - vars: { language: 'Italian', langCode: 'it', cefr: 'B1' }
+      - vars: { language: 'Portuguese', langCode: 'pt', cefr: 'B1' }
+      - vars: { language: 'Dutch', langCode: 'nl', cefr: 'B1' }
+      - vars: { language: 'Swedish', langCode: 'sv', cefr: 'B1' }
+      - vars: { language: 'Turkish', langCode: 'tr', cefr: 'B1' }
+      - vars: { language: 'Greek', langCode: 'el', cefr: 'B1' }
+      - vars: { language: 'Arabic', langCode: 'ar', cefr: 'B1' }
+      - vars: { language: 'Hindi', langCode: 'hi', cefr: 'B1' }
+      - vars: { language: 'Japanese', langCode: 'ja', cefr: 'B1' }
+      - vars: { language: 'Korean', langCode: 'ko', cefr: 'B1' }
+      - vars: { language: 'Mandarin', langCode: 'zh', cefr: 'B1' }
+      - vars: { language: 'Russian', langCode: 'ru', cefr: 'B1' }
+    tests:
+      - description: '{{language}} B1 - Neutral Opening'
+        vars: { user_input: 'Anything' }
+        assert:
+          - type: contains
+            value: learn
+          - type: contains
+            value: practice
+          - type: contains
+            value: improve
+          - type: not-contains
+            value: error
+      - description: '{{language}} B1 - Frustrated User'
+        vars: { user_input: 'No I have never seen a map' }
+        assert:
+          - type: not-contains
+            value: 'map'
+      - description: '{{language}} B1 - Confused User'
+        vars: { user_input: 'What does that mean?' }
+        assert:
+          - type: contains
+            value: means
+          - type: contains
+            value: example

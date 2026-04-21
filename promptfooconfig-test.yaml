@@ -1,0 +1,24 @@
+description: "Myno AI Tutor - Conversation Quality & Adaptability Tests"
+
+prompts:
+  - file://prompts/myno_system_prompt.txt
+
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: pEQx16ahYx8GVo5pszMygsCaRXo4lmnd
+      temperature: 0.3
+      max_tokens: 512
+
+tests:
+  - description: "Frustrated user - AI should pivot topic after repeated 'no'"
+    vars:
+      scenario: |
+        You are a frustrated A1 English learner. You answer "no" to every question.
+        If the AI keeps asking about the same topic, you become more annoyed.
+        If the AI changes the topic, you become happy and engaged.
+    assert:
+      - type: llm-rubric
+        value: "The AI tutor does not ask about the same word or topic more than twice. It acknowledges the user's disinterest and introduces something new."
+      - type: contains-any
+        value: ["Let's try", "How about", "different", "another word"]

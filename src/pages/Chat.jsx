@@ -11,12 +11,12 @@ import { getBcp47Tag } from "@/lib/voiceEngine";
 import { expandResponse } from "@/lib/textSync";
 
 const getPronunciationLabel = (confidence) => {
-    if (!confidence) return { label: "Needs Work", color: "text-red-400", bg: "bg-red-400/10", emoji: "⚠️" };
-    const score = Math.round(confidence * 100);
-    if (score >= 90) return { label: "Clear", color: "text-green-400", bg: "bg-green-400/10", emoji: "🎯" };
-    if (score >= 70) return { label: "Natural", color: "text-blue-400", bg: "bg-blue-400/10", emoji: "👍" };
-    return { label: "Needs Work", color: "text-red-400", bg: "bg-red-400/10", emoji: "⚠️" };
-  };
+  if (!confidence) return { label: "Needs Work", color: "text-red-400", bg: "bg-red-400/10", emoji: "⚠️" };
+  const score = Math.round(confidence * 100);
+  if (score >= 90) return { label: "Clear", color: "text-green-400", bg: "bg-green-400/10", emoji: "🎯" };
+  if (score >= 70) return { label: "Natural", color: "text-blue-400", bg: "bg-blue-400/10", emoji: "👍" };
+  return { label: "Needs Work", color: "text-red-400", bg: "bg-red-400/10", emoji: "⚠️" };
+};
 
 export default function Chat() {
   const chatState = useChatManager();
@@ -882,52 +882,66 @@ export default function Chat() {
         )}
 
         {/* Input row with smaller mic button */}
-        <div className="flex items-center gap-2">
-          {/* Smaller mic button */}
-          <button
-            onClick={isListening ? stopVoice : startVoiceInput}
+        <div className="relative">
+          {/* AI activity indicator ring */}
+          <motion.div
             className={cn(
-              "relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all scale-on-press",
-              isListening ? "bg-red-500" : "bg-primary"
+              "absolute inset-0 rounded-full pointer-events-none",
+              (isListening || isLoading) && "border-2 border-primary"
             )}
-            aria-label="Record voice"
-          >
-            {isListening && <div className="absolute inset-0 rounded-full border-2 border-red-300 animate-pulse" />}
-            {isListening
-              ? <StopIcon className="w-4 h-4 text-white" />
-              : <MicrophoneIcon className="w-4 h-4 text-white" />
-            }
-          </button>
+            animate={{
+              opacity: (isListening || isLoading) ? [0.4, 1, 0.4] : 0,
+              scale: (isListening || isLoading) ? [1, 1.02, 1] : 1,
+            }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          />
+          <div className="flex items-center gap-2">
+            {/* Smaller mic button */}
+            <button
+              onClick={isListening ? stopVoice : startVoiceInput}
+              className={cn(
+                "relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all scale-on-press",
+                isListening ? "bg-red-500" : "bg-primary"
+              )}
+              aria-label="Record voice"
+            >
+              {isListening && <div className="absolute inset-0 rounded-full border-2 border-red-300 animate-pulse" />}
+              {isListening
+                ? <StopIcon className="w-4 h-4 text-white" />
+                : <MicrophoneIcon className="w-4 h-4 text-white" />
+              }
+            </button>
 
-          {/* Text input with clear button inside */}
-          <div className="flex-1 relative">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(input))}
-              placeholder="Type your message..."
-              className="w-full h-11 rounded-2xl border-2 border-border bg-background pl-4 pr-10 text-base font-medium outline-none focus:border-primary transition-colors"
-            />
-            {/* Clear button inside input (X) */}
-            {input.trim() && (
-              <button
-                onClick={() => setInput("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ×
-              </button>
-            )}
+            {/* Text input with clear button inside */}
+            <div className="flex-1 relative">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(input))}
+                placeholder="Type your message..."
+                className="w-full h-11 rounded-2xl border-2 border-border bg-background pl-4 pr-10 text-base font-medium outline-none focus:border-primary transition-colors"
+              />
+              {/* Clear button inside input (X) */}
+              {input.trim() && (
+                <button
+                  onClick={() => setInput("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* Send button */}
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isLoading}
+              className="w-11 h-11 rounded-2xl bg-primary text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-primary/90"
+              aria-label="Send message"
+            >
+              {isLoading ? <LoadingSpinner size="sm" className="text-white" /> : <PaperAirplaneIcon className="w-4 h-4" />}
+            </button>
           </div>
-
-          {/* Send button */}
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isLoading}
-            className="w-11 h-11 rounded-2xl bg-primary text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:bg-primary/90"
-            aria-label="Send message"
-          >
-            {isLoading ? <LoadingSpinner size="sm" className="text-white" /> : <PaperAirplaneIcon className="w-4 h-4" />}
-          </button>
         </div>
 
         {/* Scenario cards (collapsed by default, show as hint) */}

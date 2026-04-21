@@ -1,0 +1,30 @@
+description: "Quick verification of multi-turn configuration"
+
+providers:
+  - id: promptfoo:simulated-user
+    config:
+      provider: mistral:mistral-small
+      providerConfig:
+        apiKey: ${MISTRAL_API_KEY}
+        temperature: 0.3
+        max_tokens: 512
+      systemPrompt: file://prompts/myno_system_prompt.txt
+      maxTurns: 2
+      userPrompt: |
+        You are roleplaying as the user described below. Respond naturally to the AI tutor's messages.
+        Stay in character throughout the conversation.
+        
+        User Persona:
+        {{scenario}}
+      evaluator: |
+        After the conversation ends, evaluate the AI tutor's performance based on this rubric:
+        {{assertion}}
+
+tests:
+  - description: "Quick test - frustrated user"
+    vars:
+      scenario: |
+        You are a frustrated A1 English learner. You answer "no" to questions.
+        Start by saying "Hello."
+      assertion: |
+        The AI tutor responds appropriately.

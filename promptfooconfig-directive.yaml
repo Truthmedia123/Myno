@@ -1,0 +1,62 @@
+description: Test configuration with directive-only system prompt
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: pEQx16ahYx8GVo5pszMygsCaRXo4lmnd
+      temperature: 0.7
+      max_tokens: 150
+
+prompts:
+  - file://prompts/myno_system_prompt_directive.txt
+
+tests:
+  - description: Frustrated user - should change topic
+    vars:
+      conversation: |
+        User: No, I don't want to learn English
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The assistant should NOT mention "map" or "sun".
+          The assistant should change topic to a different word like "book".
+          The assistant should NOT ask "What does 'map' mean?".
+          The assistant should NOT say "Great!" or praise the user.
+          The assistant should NOT start with "Hello".
+      - type: contains
+        value: "book"
+
+  - description: Confused user - should explain "map" immediately
+    vars:
+      conversation: |
+        User: What does 'map' mean?
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The assistant should explain "map" immediately without greeting.
+          The assistant should use "For example" in the explanation.
+          The assistant should NOT start with "Great!" or praise.
+          The assistant should NOT say "Hello".
+          The assistant should NOT change topic to "book" or "sun".
+      - type: contains
+        value: "For example"
+
+  - description: Happy user - should start with "Great!" and introduce "sun"
+    vars:
+      conversation: |
+        User: I love learning new words!
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The assistant should start with "Great!".
+          The assistant should praise the user.
+          The assistant should introduce a new word like "sun".
+          The assistant should NOT explain "map".
+          The assistant should NOT say "Hello".
+          The assistant should NOT change topic to "book".
+      - type: contains
+        value: "Great!"
+      - type: contains
+        value: "sun"

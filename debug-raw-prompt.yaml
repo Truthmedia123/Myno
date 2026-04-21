@@ -1,0 +1,13 @@
+description: "Debug raw prompt test"
+
+prompts:
+  - file://prompts/myno_system_prompt.txt
+
+providers:
+  - id: echo
+    label: echo-provider
+
+tests:
+  - description: "See what prompt is being sent"
+    vars:
+      user_message: "Anything"

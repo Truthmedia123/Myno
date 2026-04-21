@@ -1,0 +1,58 @@
+description: "Myno AI Tutor - Final Optimized System Prompt"
+
+prompts:
+  - file://prompts/myno_system_prompt_final.txt
+
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: pEQx16ahYx8GVo5pszMygsCaRXo4lmnd
+      temperature: 0.3
+      max_tokens: 512
+
+tests:
+  - description: "Frustrated user - AI should pivot topic after repeated 'no'"
+    vars:
+      conversation: |
+        User: Anything
+        Assistant:
+        User: No I have never seen a map
+        Assistant:
+        User: No, I told you I don't know what a map is
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The AI tutor does not mention the word "map" in the final response.
+          Instead, it introduces a completely different word or asks a new question on a new topic.
+      - type: not-contains
+        value: "map"
+
+  - description: "Confused user - AI should explain patiently"
+    vars:
+      conversation: |
+        User: What does 'map' mean?
+        Assistant:
+        User: I still don't understand. Can you explain differently?
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The AI tutor's second response provides a simpler explanation or a concrete example.
+          It does not repeat the same explanation verbatim.
+      - type: contains-any
+        value: ["For example", "Imagine", "Like a"]
+
+  - description: "Happy user - AI should be encouraging"
+    vars:
+      conversation: |
+        User: I love learning new words!
+        Assistant:
+        User: Yes! I know 'hello' and 'thank you'.
+        Assistant:
+    assert:
+      - type: llm-rubric
+        value: |
+          The AI tutor is enthusiastic and encouraging. It praises the user and introduces a new word naturally.
+      - type: contains-any
+        value: ["Great", "Wonderful", "Excellent", "Good job", "Perfect"]

@@ -1,0 +1,39 @@
+description: "Debug few-shot prompt test"
+
+prompts:
+  - file://prompts/myno_system_prompt.txt
+
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: pEQx16ahYx8GVo5pszMygsCaRXo4lmnd
+      temperature: 0.3
+      max_tokens: 512
+
+tests:
+  - description: "Test EXAMPLE 4 match - User says 'Anything'"
+    vars:
+      user_message: "Anything"
+    assert:
+      - type: contains
+        value: "map"
+      - type: contains
+        value: "picture of places"
+
+  - description: "Test EXAMPLE 2 match - User asks 'What does 'map' mean?'"
+    vars:
+      user_message: "What does 'map' mean?"
+    assert:
+      - type: contains
+        value: "For example"
+      - type: contains
+        value: "treasure"
+
+  - description: "Test EXAMPLE 3 match - User says 'I love learning new words!'"
+    vars:
+      user_message: "I love learning new words!"
+    assert:
+      - type: contains
+        value: "Great"
+      - type: contains
+        value: "sun"

@@ -1,0 +1,19 @@
+description: "Debug conversation template"
+
+prompts:
+  - file://prompts/myno_system_prompt.txt
+
+providers:
+  - id: mistral:mistral-small
+    config:
+      apiKey: pEQx16ahYx8GVo5pszMygsCaRXo4lmnd
+      temperature: 0.3
+      max_tokens: 512
+
+tests:
+  - description: "Simple test - what prompt is being sent?"
+    vars:
+      user_message: "What does 'map' mean?"
+    assert:
+      - type: contains
+        value: "map"
